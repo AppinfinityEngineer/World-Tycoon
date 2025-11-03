@@ -1,29 +1,54 @@
-import { useAuth } from "../store/auth";
+import { useEffect, useState } from "react";
+import api from "../lib/api";
+
+function StatCard({ title, value, sub }) {
+    return (
+        <div className="bg-white rounded-lg shadow p-4">
+            <div className="text-sm text-gray-500">{title}</div>
+            <div className="text-2xl font-semibold mt-1">{value}</div>
+            {sub && <div className="text-xs text-gray-400 mt-1">{sub}</div>}
+        </div>
+    );
+}
 
 export default function Dashboard() {
-    const { user, logout } = useAuth();
+    const [stats, setStats] = useState({ users: 0, waitlist: 0 });
+    const [exp, setExp] = useState("-");
+
+    useEffect(() => {
+        let t;
+        try {
+            t = localStorage.getItem("wt_token");
+            if (t) {
+                const payload = JSON.parse(atob(t.split(".")[1]));
+                if (payload?.exp) {
+                    const ms = payload.exp * 1000 - Date.now();
+                    setExp(ms > 0 ? Math.ceil(ms / 60000) + " min" : "expired");
+                }
+            }
+        } catch { }
+
+        (async () => {
+            try {
+                const { data } = await api.get("/stats/overview");
+                setStats(data);
+            } catch {
+                // leave defaults
+            }
+        })();
+    }, []);
+
     return (
-        <div className="min-h-screen flex flex-col bg-gray-100 text-gray-800">
-            <header className="bg-blue-600 text-white p-4 flex justify-between items-center">
-                <h1 className="font-bold">World Tycoon</h1>
-                <div>
-                    <span className="mr-4">Welcome {user?.email} (id: {user?.id})</span>
-                    <button onClick={logout} className="bg-white text-blue-600 px-3 py-1 rounded">Logout</button>
-                </div>
-            </header>
-            <main className="flex flex-1">
-                <aside className="w-60 bg-white border-r p-4">
-                    <ul className="space-y-2">
-                        <li>🏠 Dashboard</li>
-                        <li>🗺️ Map</li>
-                        <li>⚙️ Settings</li>
-                    </ul>
-                </aside>
-                <section className="flex-1 p-6">
-                    <h2 className="text-2xl font-semibold mb-4">Dashboard Overview</h2>
-                    <div className="border border-dashed border-gray-400 p-8 text-center">Map/UI goes here</div>
-                </section>
-            </main>
-        </div>
+        <>
+            <h2 className="text-2xl font-semibold mb-4">Dashboard Overview</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                <StatCard title="Active Users" value={stats.users} />
+                <StatCard title="Waitlist" value={stats.waitlist} />
+                <StatCard title="Your Token Expires In" value={exp} sub="HS256 JWT" />
+            </div>
+            <div className="border border-dashed border-gray-400 p-8 text-center text-gray-500 rounded-lg bg-white">
+                Map or game UI will appear here.
+            </div>
+        </>
     );
 }
