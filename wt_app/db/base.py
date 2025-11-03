@@ -10,6 +10,6 @@ class Base(DeclarativeBase):
 
 async def init_db():
     async with engine.begin() as conn:
-        # 👇 ensure models are registered with Base.metadata
+        # ensure models are registered with Base.metadata
         from wt_app.db import models  # noqa: F401
         await conn.run_sync(Base.metadata.create_all)

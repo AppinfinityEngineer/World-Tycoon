@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     max_active_users: int = 100          # capacity before waitlist
     signups_open: bool = True            # set False to freeze signups
 
+    admin_api_key: str = "dev-key"
+
     sqlite_url: str = "sqlite+aiosqlite:///./worldtycoon.db"
 
     class Config:
