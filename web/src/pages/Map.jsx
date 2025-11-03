@@ -1,4 +1,3 @@
-// src/pages/Map.jsx
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
@@ -8,11 +7,8 @@ function squareIcon(color = "#22c55e") {
     return L.divIcon({
         className: "wt-square-icon",
         html: `<div style="
-      width:16px;height:16px;
-      border-radius:4px;
-      background:${color};
-      box-shadow:0 1px 2px rgba(0,0,0,.25);
-      border:1px solid rgba(0,0,0,.2);
+      width:16px;height:16px;border-radius:4px;background:${color};
+      box-shadow:0 1px 2px rgba(0,0,0,.25);border:1px solid rgba(0,0,0,.2);
     "></div>`,
         iconSize: [16, 16],
         iconAnchor: [8, 8],
@@ -42,6 +38,28 @@ export default function MapPage() {
         localStorage.setItem("wt_pins", JSON.stringify(pins));
     }, [pins]);
 
+    function downloadPins(list) {
+        const blob = new Blob([JSON.stringify(list, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = "world-tycoon-pins.json"; a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    function uploadPins(e) {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            try {
+                const data = JSON.parse(reader.result);
+                if (Array.isArray(data)) setPins(data);
+            } catch { }
+        };
+        reader.readAsText(file);
+        e.target.value = "";
+    }
+
     const centerUK = useMemo(() => [52.8, -2.2], []);
 
     return (
@@ -57,11 +75,18 @@ export default function MapPage() {
                 <button className="px-3 py-2 rounded-lg border" onClick={() => setPins([])}>
                     Clear Pins
                 </button>
+                <button className="px-3 py-2 rounded-lg border" onClick={() => downloadPins(pins)}>
+                    Save Layout
+                </button>
+                <label className="px-3 py-2 rounded-lg border cursor-pointer">
+                    Load Layout
+                    <input type="file" accept="application/json" className="hidden" onChange={uploadPins} />
+                </label>
             </div>
 
             <MapContainer
                 center={centerUK}
-                zoom={6}
+                zoom={12}
                 style={{ height: 560, width: "100%" }}
                 className="rounded-xl border"
             >
@@ -69,10 +94,7 @@ export default function MapPage() {
                     attribution="&copy; OpenStreetMap"
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
-                <ClickToAdd
-                    colorIdx={colorIdx}
-                    onAdd={(p) => setPins((prev) => [...prev, p])}
-                />
+                <ClickToAdd colorIdx={colorIdx} onAdd={(p) => setPins((prev) => [...prev, p])} />
                 {pins.map((p, i) => (
                     <Marker key={i} position={[p.lat, p.lng]} icon={squareIcon(p.color)} />
                 ))}

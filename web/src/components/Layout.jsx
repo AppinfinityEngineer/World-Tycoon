@@ -39,11 +39,9 @@ export default function Layout() {
             </aside>
 
             <main className="flex-1">
-                {/* Header: sticky, dynamic title, keeps your user + logout */}
                 <header className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b">
                     <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
                         <div className="font-medium tracking-wide">{title}</div>
-
                         <div className="flex items-center gap-3">
                             <span className="hidden sm:inline text-xs text-gray-500">
                                 Alpha • feature/dashboard-ui-v2
