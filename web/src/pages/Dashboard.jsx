@@ -1,6 +1,29 @@
+// web/src/pages/Dashboard.jsx
 import { useEffect, useState } from "react";
 import api from "../lib/api";
 import { useAuth } from "../store/auth";
+
+/* utils */
+function useNow(intervalMs = 1000) {
+    const [now, setNow] = useState(Date.now());
+    useEffect(() => {
+        const id = setInterval(() => setNow(Date.now()), intervalMs);
+        return () => clearInterval(id);
+    }, [intervalMs]);
+    return now;
+}
+function clamp01(x) { return Math.max(0, Math.min(1, x)); }
+function fmtDHMS(ms) {
+    if (ms <= 0) return "00:00:00";
+    const s = Math.floor(ms / 1000);
+    const d = Math.floor(s / 86400);
+    const h = Math.floor((s % 86400) / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const ss = s % 60;
+    return d > 0
+        ? `${d}d ${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(ss).padStart(2, "0")}`
+        : `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+}
 
 /* small stat card */
 function Card({ title, value, hint }) {
@@ -13,53 +36,143 @@ function Card({ title, value, hint }) {
     );
 }
 
-/* tiny timing hooks/utils */
-function useNow(intervalMs = 1000) {
-    const [now, setNow] = useState(Date.now());
-    useEffect(() => {
-        const id = setInterval(() => setNow(Date.now()), intervalMs);
-        return () => clearInterval(id);
-    }, [intervalMs]);
-    return now;
-}
-function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
-function mmss(ms) {
-    if (ms <= 0) return "00:00";
-    const m = Math.floor(ms / 60000);
-    const s = Math.floor((ms % 60000) / 1000);
-    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+/* Season card */
+function SeasonCard() {
+    const [data, setData] = useState(null);
+    const now = useNow(1000);
+
+    async function load() {
+        const { data } = await api.get("/settings/season");
+        setData(data);
+    }
+    useEffect(() => { load(); }, []);
+
+    if (!data) return <div className="p-4 rounded-lg border bg-white text-sm text-gray-500">Loading season…</div>;
+
+    const { seasonStart, seasonEnd } = data;
+    const start = seasonStart;
+    const end = seasonEnd;
+
+    const before = now < start;
+    const live = now >= start && now < end;
+    const after = now >= end;
+
+    let title = "Season";
+    let timer = "—";
+    if (before) { title = "Season Starts In"; timer = fmtDHMS(start - now); }
+    if (live) { title = "Season Ends In"; timer = fmtDHMS(end - now); }
+    if (after) { title = "Season Finished"; timer = "00:00:00"; }
+
+    const pct = live
+        ? clamp01((now - start) / Math.max(1, (end - start)))
+        : before ? 0 : 1;
+
+    return (
+        <div className="p-4 rounded-lg border bg-white">
+            <div className="text-sm text-gray-500">{title}</div>
+            <div className="text-2xl font-semibold mt-1">{timer}</div>
+            <div className="mt-3 h-2 w-full rounded bg-gray-100 overflow-hidden">
+                <div className="h-2 bg-indigo-600" style={{ width: `${Math.round(pct * 100)}%` }} />
+            </div>
+            <div className="text-xs text-gray-400 mt-2">
+                {new Date(seasonStart).toLocaleString()} → {new Date(seasonEnd).toLocaleString()}
+            </div>
+        </div>
+    );
 }
 
-/* balances panel (unchanged) */
+/* Events panel (your existing, trimmed) */
+function EventsPanel() {
+    const [events, setEvents] = useState([]);
+    const [loading, setLoading] = useState(true);
+    function usePulse(ms = 10000) { const n = useNow(ms); return n; }
+    const pulse = usePulse(10000);
+
+    async function fetchEvents() {
+        const { data } = await api.get("/events");
+        setEvents(data || []);
+        setLoading(false);
+    }
+    useEffect(() => { fetchEvents(); }, []);
+    useEffect(() => { if (!loading) fetchEvents(); }, [pulse]);
+
+    async function add(type, city, note, cdMins) {
+        const { data } = await api.post("/events", { type, city, note, cdMins });
+        setEvents((prev) => [data, ...prev].slice(0, 200));
+    }
+    async function clearAll() { await api.delete("/events"); setEvents([]); }
+
+    function mmss(ms) {
+        if (ms <= 0) return "00:00";
+        const m = Math.floor(ms / 60000);
+        const s = Math.floor((ms % 60000) / 1000);
+        return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    }
+    const now = useNow(1000);
+
+    if (loading) return <div className="p-4 rounded-lg border bg-white text-sm text-gray-500">Loading events…</div>;
+
+    return (
+        <div className="p-4 rounded-lg border bg-white">
+            <div className="mb-3 flex items-center justify-between">
+                <div className="font-medium">Influence Ops — Recent Events</div>
+                <div className="flex items-center gap-2">
+                    <button className="px-3 py-2 rounded-lg border"
+                        onClick={() => add("Power Outage", "Neo London", "Blocked by Generator Upgrade", 45)}>+ Power Outage</button>
+                    <button className="px-3 py-2 rounded-lg border"
+                        onClick={() => add("Media Scandal", "Metro York", "PR Office mitigated 60%", 55)}>+ Media Scandal</button>
+                    <button className="px-3 py-2 rounded-lg border" onClick={clearAll}>Clear</button>
+                </div>
+            </div>
+
+            {events.length === 0 && <div className="text-sm text-gray-500 mb-3">No events yet.</div>}
+
+            <ul className="divide-y">
+                {events.map((e, i) => {
+                    const t = e.t ?? Date.now();
+                    const endAt = t + (e.cdMins ?? 0) * 60 * 1000;
+                    const remain = endAt - now;
+                    const expired = remain <= 0;
+                    return (
+                        <li key={i} className="py-2 flex items-start justify-between">
+                            <div>
+                                <div className="font-medium">{e.type} — {e.city}</div>
+                                <div className="text-sm text-gray-500">{e.note}</div>
+                            </div>
+                            <span className={"text-xs " + (expired ? "text-gray-400" : "text-gray-600")}>
+                                {expired ? "CD 00:00" : `CD ${mmss(remain)}`}
+                            </span>
+                        </li>
+                    );
+                })}
+            </ul>
+        </div>
+    );
+}
+
+/* Balances panel (with 10s polling + interval hint) */
 function BalancesPanel() {
     const [summary, setSummary] = useState({ lastTick: 0, intervalSec: 0, totals: [] });
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
-    const poll = useNow(10000); // refresh every 10s
+    const pulse = useNow(10000);
 
     async function fetchSummary() {
         const { data } = await api.get("/economy/summary");
-        // data = { lastTick, intervalSec, totals }
         setSummary(data);
         setLoading(false);
     }
-
     async function runTick() {
         setBusy(true);
         try {
             const { data } = await api.post("/economy/tick");
             setSummary(data);
-        } finally {
-            setBusy(false);
-        }
+        } finally { setBusy(false); }
     }
-
     useEffect(() => { fetchSummary(); }, []);
-    useEffect(() => { if (!loading) fetchSummary(); }, [poll]); // background polling
+    useEffect(() => { if (!loading) fetchSummary(); }, [pulse]);
 
-    if (loading) {
-        return <div className="p-4 rounded-lg border bg-white text-sm text-gray-500">Loading economy…</div>;
-    }
+    if (loading) return <div className="p-4 rounded-lg border bg-white text-sm text-gray-500">Loading economy…</div>;
 
     return (
         <div className="p-4 rounded-lg border bg-white">
@@ -69,20 +182,12 @@ function BalancesPanel() {
                     {busy ? "Ticking…" : "Run Tick"}
                 </button>
             </div>
-
             {summary.totals.length === 0 ? (
-                <div className="text-sm text-gray-500">
-                    No balances yet. Assign owners/types/levels to pins, then run a tick.
-                </div>
+                <div className="text-sm text-gray-500">No balances yet. Assign owners/types/levels to pins, then run a tick.</div>
             ) : (
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">
-                        <thead>
-                            <tr className="text-left text-gray-500">
-                                <th className="py-2 pr-4">Owner</th>
-                                <th className="py-2 pr-4">Balance</th>
-                            </tr>
-                        </thead>
+                        <thead><tr className="text-left text-gray-500"><th className="py-2 pr-4">Owner</th><th className="py-2 pr-4">Balance</th></tr></thead>
                         <tbody>
                             {summary.totals.map((row) => (
                                 <tr key={row.owner} className="border-t">
@@ -94,113 +199,10 @@ function BalancesPanel() {
                     </table>
                 </div>
             )}
-
             <div className="text-xs text-gray-400 mt-2">
                 Last tick: {summary.lastTick ? new Date(summary.lastTick).toLocaleString() : "—"}
                 {summary.intervalSec ? ` • Auto-ticking every ${Math.round(summary.intervalSec / 60)} min` : ""}
             </div>
-        </div>
-    );
-}
-
-/* events panel — polished */
-function EventsPanel() {
-    const [events, setEvents] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const now = useNow(1000);      // drives progress bars
-    const pollNow = useNow(10000); // background refresh every 10s
-
-    function normalize(list) {
-        const arr = Array.isArray(list) ? list : [];
-        // remove fully expired except keep the latest 5 for context
-        const withIdx = arr.map((e, i) => ({ ...e, _i: i }));
-        const active = [];
-        const expired = [];
-        for (const e of withIdx) {
-            const start = typeof e.t === "number" ? e.t : Date.now();
-            const cd = typeof e.cdMins === "number" ? e.cdMins : 0;
-            const endAt = start + cd * 60 * 1000;
-            if (endAt > Date.now()) active.push(e); else expired.push(e);
-        }
-        expired.sort((a, b) => b._i - a._i);
-        const keepExpired = expired.slice(0, 5);
-        const out = [...active, ...keepExpired];
-        // hard cap to 100 newest
-        return out.slice(0, 100);
-    }
-
-    async function fetchEvents() {
-        try {
-            const { data } = await api.get("/events");
-            setEvents(normalize(data));
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    useEffect(() => { fetchEvents(); }, []);
-    useEffect(() => { if (!loading) fetchEvents(); /* poll */ }, [pollNow]); // background refresh
-
-    async function add(type, city, note, cdMins) {
-        const { data } = await api.post("/events", { type, city, note, cdMins });
-        setEvents(prev => normalize([data, ...prev]));
-    }
-
-    async function clearAll() {
-        await api.delete("/events");
-        setEvents([]);
-    }
-
-    if (loading) {
-        return <div className="p-4 rounded-lg border bg-white text-sm text-gray-500">Loading events…</div>;
-    }
-
-    return (
-        <div className="p-4 rounded-lg border bg-white">
-            <div className="mb-3 flex items-center justify-between">
-                <div className="font-medium">Influence Ops — Recent Events</div>
-                <div className="flex items-center gap-2">
-                    <button className="px-3 py-2 rounded-lg border"
-                        onClick={() => add("Power Outage", "Neo London", "Blocked by Generator Upgrade", 45)}>
-                        + Power Outage
-                    </button>
-                    <button className="px-3 py-2 rounded-lg border"
-                        onClick={() => add("Media Scandal", "Metro York", "PR Office mitigated 60%", 55)}>
-                        + Media Scandal
-                    </button>
-                    <button className="px-3 py-2 rounded-lg border" onClick={clearAll}>Clear</button>
-                </div>
-            </div>
-
-            {events.length === 0 && <div className="text-sm text-gray-500 mb-3">No events yet.</div>}
-
-            <ul className="divide-y">
-                {events.map((e, i) => {
-                    const start = typeof e.t === "number" ? e.t : Date.now();
-                    const cd = typeof e.cdMins === "number" ? e.cdMins : 0;
-                    const endAt = start + cd * 60 * 1000;
-                    const remain = endAt - now;
-                    const expired = remain <= 0;
-                    const pct = cd > 0 ? clamp01((now - start) / (cd * 60 * 1000)) : 1;
-
-                    return (
-                        <li key={i} className="py-2">
-                            <div className="flex items-start justify-between">
-                                <div>
-                                    <div className="font-medium">{e.type} — {e.city}</div>
-                                    <div className="text-sm text-gray-500">{e.note}</div>
-                                </div>
-                                <span className={"text-xs " + (expired ? "text-gray-400" : "text-gray-600")}>
-                                    {expired ? "CD 00:00" : `CD ${mmss(remain)}`}
-                                </span>
-                            </div>
-                            <div className="mt-2 h-1.5 rounded bg-gray-100">
-                                <div className="h-1.5 rounded bg-gray-400" style={{ width: `${pct * 100}%` }} />
-                            </div>
-                        </li>
-                    );
-                })}
-            </ul>
         </div>
     );
 }
@@ -234,8 +236,8 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <Card title="Active Users" value={stats?.users ?? "—"} />
                 <Card title="Waitlist" value={stats?.waitlist ?? "—"} />
+                <SeasonCard />
                 <Card title="Your Token" value="Active" hint="Auto-refresh on expiry" />
-                <Card title="Season Ends In" value="—" hint="Add in Phase 6" />
             </div>
 
             <BalancesPanel />

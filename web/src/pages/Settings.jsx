@@ -1,39 +1,82 @@
+// web/src/pages/Settings.jsx
 import { useEffect, useState } from "react";
+import api from "../lib/api";
+
+function toInputLocal(ms) {
+    if (!ms) return "";
+    const d = new Date(ms);
+    const pad = (n) => String(n).padStart(2, "0");
+    const yyyy = d.getFullYear();
+    const MM = pad(d.getMonth() + 1);
+    const dd = pad(d.getDate());
+    const hh = pad(d.getHours());
+    const mm = pad(d.getMinutes());
+    return `${yyyy}-${MM}-${dd}T${hh}:${mm}`;
+}
+function fromInputLocal(v) {
+    if (!v) return 0;
+    const ms = Date.parse(v);
+    return isNaN(ms) ? 0 : ms;
+}
 
 export default function Settings() {
-    const [dark, setDark] = useState(() => localStorage.getItem("wt_dark") === "1");
+    const [seasonStart, setSeasonStart] = useState("");
+    const [seasonEnd, setSeasonEnd] = useState("");
+    const [saving, setSaving] = useState(false);
+    const [msg, setMsg] = useState("");
 
-    useEffect(() => {
-        const root = document.documentElement;
-        if (dark) { root.classList.add("dark"); localStorage.setItem("wt_dark", "1"); }
-        else { root.classList.remove("dark"); localStorage.removeItem("wt_dark"); }
-    }, [dark]);
+    async function load() {
+        const { data } = await api.get("/settings/season");
+        setSeasonStart(toInputLocal(data.seasonStart));
+        setSeasonEnd(toInputLocal(data.seasonEnd));
+    }
+    useEffect(() => { load(); }, []);
 
-    const submitPassword = (e) => {
-        e.preventDefault();
-        alert("Password change endpoint comes in a later phase.");
-    };
+    async function save() {
+        setSaving(true); setMsg("");
+        try {
+            const startMs = fromInputLocal(seasonStart);
+            const endMs = fromInputLocal(seasonEnd);
+            if (!startMs || !endMs || startMs >= endMs) {
+                setMsg("Start must be before end.");
+                return;
+            }
+            await api.put("/settings/season", { seasonStart: startMs, seasonEnd: endMs });
+            setMsg("Saved.");
+        } catch (e) {
+            setMsg("Save failed.");
+        } finally {
+            setSaving(false);
+        }
+    }
 
     return (
-        <div className="space-y-4">
-            <div className="p-4 rounded-lg border bg-white dark:bg-gray-800 dark:text-gray-100">
-                <div className="flex items-center justify-between">
-                    <div>Dark Mode</div>
-                    <label className="inline-flex items-center gap-2">
-                        <input type="checkbox" checked={dark} onChange={e => setDark(e.target.checked)} />
-                        <span className="text-sm text-gray-600 dark:text-gray-300">{dark ? "On" : "Off"}</span>
+        <div className="p-4 space-y-6">
+            <div className="p-4 rounded-lg border bg-white">
+                <div className="font-medium mb-3">Season Window</div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="block">
+                        <div className="text-sm text-gray-600 mb-1">Season Start</div>
+                        <input type="datetime-local"
+                            className="w-full border rounded px-3 py-2"
+                            value={seasonStart}
+                            onChange={(e) => setSeasonStart(e.target.value)} />
+                    </label>
+                    <label className="block">
+                        <div className="text-sm text-gray-600 mb-1">Season End</div>
+                        <input type="datetime-local"
+                            className="w-full border rounded px-3 py-2"
+                            value={seasonEnd}
+                            onChange={(e) => setSeasonEnd(e.target.value)} />
                     </label>
                 </div>
-            </div>
-
-            <form onSubmit={submitPassword} className="p-4 rounded-lg border bg-white dark:bg-gray-800 dark:text-gray-100">
-                <div className="font-medium mb-2">Change Password (stub)</div>
-                <div className="grid sm:grid-cols-3 gap-2">
-                    <input className="border rounded px-3 py-2" placeholder="Current password" type="password" />
-                    <input className="border rounded px-3 py-2" placeholder="New password" type="password" />
-                    <button className="px-3 py-2 rounded bg-gray-900 text-white">Update</button>
+                <div className="mt-3 flex items-center gap-2">
+                    <button className="px-3 py-2 rounded-lg border" disabled={saving} onClick={save}>
+                        {saving ? "Saving…" : "Save"}
+                    </button>
+                    {msg && <div className="text-sm text-gray-500">{msg}</div>}
                 </div>
-            </form>
+            </div>
         </div>
     );
 }
