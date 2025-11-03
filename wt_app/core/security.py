@@ -3,7 +3,8 @@ from passlib.context import CryptContext
 from jose import jwt
 from wt_app.core.config import settings
 
-pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Use Argon2
+pwd = CryptContext(schemes=["argon2"], deprecated="auto")
 ALGO = "HS256"
 
 def hash_password(p: str) -> str:

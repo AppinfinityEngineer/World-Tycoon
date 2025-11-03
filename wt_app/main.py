@@ -1,6 +1,7 @@
 from fastapi import FastAPI
-from wt_app.db.base import init_db
-from wt_app.api.auth import router as auth_router
+from wt_app.core.config import settings
+from wt_app.db.base import async_session, init_db
+from wt_app.api.auth import router as auth_router   # <-- IMPORTANT
 
 app = FastAPI(title="World Tycoon")
 
@@ -8,12 +9,25 @@ app = FastAPI(title="World Tycoon")
 async def _startup():
     await init_db()
 
-@app.get("/health")
-async def health():
-    return {"ok": True}
+# --- debug helpers (optional; remove later) ---
+from sqlalchemy import select, func
+from wt_app.db.models import User
 
-@app.get("/")
-async def home():
-    return {"message": "World Tycoon API is alive"}
+@app.get("/_debug/settings")
+async def _dbg_settings():
+    return {
+        "signups_open": settings.signups_open,
+        "max_active_users": settings.max_active_users,
+        "sqlite_url": settings.sqlite_url,
+    }
 
+@app.get("/_debug/users")
+async def _dbg_users():
+    async with async_session() as s:
+        count = (await s.execute(select(func.count()).select_from(User))).scalar_one()
+        rows = (await s.execute(select(User.id, User.email))).all()
+        return {"user_count": count, "users": [dict(r._mapping) for r in rows]}
+# ------------------------------------------------
+
+# Mount auth endpoints
 app.include_router(auth_router)
