@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import String, Integer, Float, Boolean, DateTime, func, UniqueConstraint
+from sqlalchemy import String, Integer, Float, DateTime, func, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from wt_app.db.base import Base
 

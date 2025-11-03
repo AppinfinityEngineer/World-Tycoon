@@ -7,6 +7,10 @@ from wt_app.core.config import settings
 from wt_app.db.base import async_session
 from wt_app.db.models import User
 
+import time
+from collections import deque, defaultdict
+from fastapi import HTTPException, Request, status
+
 bearer = HTTPBearer(auto_error=False)
 
 async def get_current_user(creds: HTTPAuthorizationCredentials = Depends(bearer)) -> User:
@@ -26,3 +30,17 @@ async def get_current_user(creds: HTTPAuthorizationCredentials = Depends(bearer)
         if not user:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
         return user
+    
+_buckets: dict[tuple[str, str], deque[float]] = defaultdict(deque)
+
+def rate_limit(max_hits: int, window_sec: int):
+    async def _guard(request: Request):
+        key = (request.url.path, request.client.host if request.client else "unknown")
+        now = time.time()
+        q = _buckets[key]
+        while q and now - q[0] > window_sec:
+            q.popleft()
+        if len(q) >= max_hits:
+            raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests")
+        q.append(now)
+    return _guard
