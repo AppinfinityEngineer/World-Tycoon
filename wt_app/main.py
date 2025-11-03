@@ -12,6 +12,7 @@ from wt_app.api.stats import router as stats_router
 
 # new events router
 from wt_app.api.events import router as events_router  # <-- add this
+from wt_app.api.pins import router as pins_router
 
 # ------------------------------------------------
 
@@ -21,6 +22,7 @@ app = FastAPI(title="World Tycoon")
 app.include_router(admin_router)
 app.include_router(stats_router)
 app.include_router(auth_router)
+app.include_router(pins_router)
 
 # include new events router
 app.include_router(events_router)
