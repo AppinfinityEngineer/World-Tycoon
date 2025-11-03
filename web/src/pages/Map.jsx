@@ -1,70 +1,51 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
-import "leaflet/dist/leaflet.css";
 
-const LS_KEY = "wt_map_view"; // { center:[lat,lng], zoom }
+const LS_KEY = "wt_map_view";
 
 export default function MapPage() {
-    const mapRef = useRef(null);      // Leaflet map instance
-    const mapDivRef = useRef(null);   // DOM node for map
-    const [marker, setMarker] = useState(null);
+    const ref = useRef(null);
+    const [map, setMap] = useState(null);
+    const [pins, setPins] = useState([]);
 
     useEffect(() => {
-        if (!mapDivRef.current || mapRef.current) return; // already inited
-
-        const saved = (() => {
-            try { return JSON.parse(localStorage.getItem(LS_KEY) || ""); }
-            catch { return null; }
-        })() || { center: [51.5, -0.1], zoom: 6 };
-
-        const m = L.map(mapDivRef.current, { zoomControl: true })
-            .setView(saved.center, saved.zoom);
-
+        if (map) return;
+        const root = ref.current;
+        const saved = JSON.parse(localStorage.getItem(LS_KEY) || "{}");
+        const m = L.map(root).setView(saved.center || [51.5, -0.1], saved.zoom || 6);
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-            maxZoom: 19,
-            attribution: "&copy; OpenStreetMap contributors",
+            attribution: "© OpenStreetMap",
+            maxZoom: 19
         }).addTo(m);
-
-        m.on("moveend", () => {
-            const c = m.getCenter();
-            localStorage.setItem(LS_KEY, JSON.stringify({
-                center: [c.lat, c.lng],
-                zoom: m.getZoom(),
-            }));
+        m.on("moveend zoomend", () => {
+            localStorage.setItem(LS_KEY, JSON.stringify({ center: m.getCenter(), zoom: m.getZoom() }));
         });
+        setMap(m);
+    }, [map]);
 
-        // ensure correct size after initial layout
-        m.whenReady(() => {
-            requestAnimationFrame(() => m.invalidateSize());
-        });
-
-        mapRef.current = m;
-        return () => { m.remove(); mapRef.current = null; };
-    }, []);
+    useEffect(() => {
+        return () => { map?.remove(); };
+    }, [map]);
 
     const addPin = () => {
-        const m = mapRef.current;
-        if (!m) return;
-        const c = m.getCenter();
-        if (marker) { marker.setLatLng(c); return; }
-        const mk = L.marker(c).addTo(m);
-        setMarker(mk);
+        if (!map) return;
+        const c = map.getCenter();
+        const marker = L.circleMarker([c.lat, c.lng], { radius: 8, weight: 2, fillOpacity: 0.6 });
+        marker.addTo(map);
+        setPins(p => [...p, marker]);
     };
 
+    const centerUK = () => map?.setView([51.5, -0.1], 6);
+    const clearPins = () => { pins.forEach(p => p.remove()); setPins([]); };
+
     return (
-        <div className="content" style={{ height: "100%" }}>
-            <div style={{ padding: 8 }}>
-                <button onClick={addPin}>Add pin</button>
+        <div className="space-y-3">
+            <div className="flex gap-2">
+                <button onClick={centerUK} className="px-3 py-1.5 rounded bg-gray-200">Center UK</button>
+                <button onClick={addPin} className="px-3 py-1.5 rounded bg-indigo-600 text-white">Add Pin</button>
+                <button onClick={clearPins} className="px-3 py-1.5 rounded bg-gray-200">Clear Pins</button>
             </div>
-            <div
-                id="map"
-                ref={mapDivRef}
-                style={{
-                    height: "calc(100vh - 56px)", // adjust to your topbar height
-                    width: "100%",
-                    minHeight: 420
-                }}
-            />
+            <div ref={ref} className="h-[70vh] rounded-lg border overflow-hidden" />
         </div>
     );
 }

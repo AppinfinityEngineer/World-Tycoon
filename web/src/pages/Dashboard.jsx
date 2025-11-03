@@ -1,54 +1,54 @@
 import { useEffect, useState } from "react";
 import api from "../lib/api";
+import { useAuth } from "../store/auth";
 
-function StatCard({ title, value, sub }) {
+function Card({ title, value, hint }) {
     return (
-        <div className="bg-white rounded-lg shadow p-4">
+        <div className="p-4 rounded-lg border bg-white">
             <div className="text-sm text-gray-500">{title}</div>
             <div className="text-2xl font-semibold mt-1">{value}</div>
-            {sub && <div className="text-xs text-gray-400 mt-1">{sub}</div>}
+            {hint && <div className="text-xs text-gray-400 mt-1">{hint}</div>}
         </div>
     );
 }
 
 export default function Dashboard() {
-    const [stats, setStats] = useState({ users: 0, waitlist: 0 });
-    const [exp, setExp] = useState("-");
+    const { token } = useAuth();
+    const [stats, setStats] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [err, setErr] = useState("");
 
     useEffect(() => {
-        let t;
-        try {
-            t = localStorage.getItem("wt_token");
-            if (t) {
-                const payload = JSON.parse(atob(t.split(".")[1]));
-                if (payload?.exp) {
-                    const ms = payload.exp * 1000 - Date.now();
-                    setExp(ms > 0 ? Math.ceil(ms / 60000) + " min" : "expired");
-                }
-            }
-        } catch { }
-
+        let ignore = false;
         (async () => {
             try {
                 const { data } = await api.get("/stats/overview");
-                setStats(data);
-            } catch {
-                // leave defaults
+                if (!ignore) { setStats(data); }
+            } catch (e) {
+                setErr("Couldn’t load stats");
+            } finally {
+                if (!ignore) setLoading(false);
             }
         })();
-    }, []);
+        return () => { ignore = true; };
+    }, [token]);
+
+    if (loading) return <div className="animate-pulse text-gray-500">Loading…</div>;
+    if (err) return <div className="text-red-600">{err}</div>;
 
     return (
-        <>
-            <h2 className="text-2xl font-semibold mb-4">Dashboard Overview</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-                <StatCard title="Active Users" value={stats.users} />
-                <StatCard title="Waitlist" value={stats.waitlist} />
-                <StatCard title="Your Token Expires In" value={exp} sub="HS256 JWT" />
+        <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <Card title="Active Users" value={stats?.users ?? "—"} />
+                <Card title="Waitlist" value={stats?.waitlist ?? "—"} />
+                <Card title="Your Token" value="Active" hint="Auto-refresh on expiry" />
+                <Card title="Season Ends In" value="—" hint="Add in Phase 6" />
             </div>
-            <div className="border border-dashed border-gray-400 p-8 text-center text-gray-500 rounded-lg bg-white">
-                Map or game UI will appear here.
+
+            <div className="p-4 rounded-lg border bg-white">
+                <div className="font-medium mb-2">Recent Activity</div>
+                <div className="text-sm text-gray-600">Coming soon (Phase 3+)</div>
             </div>
-        </>
+        </div>
     );
 }

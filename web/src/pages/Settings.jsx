@@ -1,76 +1,39 @@
 import { useEffect, useState } from "react";
-import api from "../lib/api";
-
-const DM_KEY = "wt_dark";
 
 export default function Settings() {
-    const [dark, setDark] = useState(false);
-    const [pw1, setPw1] = useState("");
-    const [pw2, setPw2] = useState("");
-    const [msg, setMsg] = useState("");
+    const [dark, setDark] = useState(() => localStorage.getItem("wt_dark") === "1");
 
     useEffect(() => {
-        const v = localStorage.getItem(DM_KEY) === "1";
-        setDark(v);
-        document.documentElement.classList.toggle("dark", v);
-    }, []);
+        const root = document.documentElement;
+        if (dark) { root.classList.add("dark"); localStorage.setItem("wt_dark", "1"); }
+        else { root.classList.remove("dark"); localStorage.removeItem("wt_dark"); }
+    }, [dark]);
 
-    const toggleDark = () => {
-        const v = !dark;
-        setDark(v);
-        localStorage.setItem(DM_KEY, v ? "1" : "0");
-        document.documentElement.classList.toggle("dark", v);
-    };
-
-    const changePassword = async () => {
-        if (!pw1 || pw1 !== pw2) { setMsg("Passwords do not match"); return; }
-        // stub: pretend success
-        try {
-            // await api.post("/auth/change-password", { new_password: pw1 }) // future
-            setMsg("Password change submitted (stub).");
-            setPw1(""); setPw2("");
-        } catch {
-            setMsg("Failed (stub).");
-        }
+    const submitPassword = (e) => {
+        e.preventDefault();
+        alert("Password change endpoint comes in a later phase.");
     };
 
     return (
-        <div className="space-y-6">
-            <h2 className="text-2xl font-semibold">Settings</h2>
-
-            <div className="bg-white rounded-lg p-4 shadow space-y-3">
+        <div className="space-y-4">
+            <div className="p-4 rounded-lg border bg-white dark:bg-gray-800 dark:text-gray-100">
                 <div className="flex items-center justify-between">
-                    <div>
-                        <div className="font-medium">Dark Mode</div>
-                        <div className="text-sm text-gray-500">Persisted to localStorage</div>
-                    </div>
-                    <button onClick={toggleDark} className="bg-gray-800 text-white px-3 py-1 rounded">
-                        {dark ? "Disable" : "Enable"}
-                    </button>
+                    <div>Dark Mode</div>
+                    <label className="inline-flex items-center gap-2">
+                        <input type="checkbox" checked={dark} onChange={e => setDark(e.target.checked)} />
+                        <span className="text-sm text-gray-600 dark:text-gray-300">{dark ? "On" : "Off"}</span>
+                    </label>
                 </div>
             </div>
 
-            <div className="bg-white rounded-lg p-4 shadow space-y-3">
-                <div className="font-medium">Change password (stub)</div>
-                <input
-                    type="password"
-                    value={pw1}
-                    onChange={(e) => setPw1(e.target.value)}
-                    placeholder="New password"
-                    className="border rounded px-3 py-2 w-full"
-                />
-                <input
-                    type="password"
-                    value={pw2}
-                    onChange={(e) => setPw2(e.target.value)}
-                    placeholder="Confirm new password"
-                    className="border rounded px-3 py-2 w-full"
-                />
-                <button onClick={changePassword} className="bg-blue-600 text-white px-3 py-1 rounded">
-                    Save
-                </button>
-                {!!msg && <div className="text-sm text-gray-600">{msg}</div>}
-            </div>
+            <form onSubmit={submitPassword} className="p-4 rounded-lg border bg-white dark:bg-gray-800 dark:text-gray-100">
+                <div className="font-medium mb-2">Change Password (stub)</div>
+                <div className="grid sm:grid-cols-3 gap-2">
+                    <input className="border rounded px-3 py-2" placeholder="Current password" type="password" />
+                    <input className="border rounded px-3 py-2" placeholder="New password" type="password" />
+                    <button className="px-3 py-2 rounded bg-gray-900 text-white">Update</button>
+                </div>
+            </form>
         </div>
     );
 }
