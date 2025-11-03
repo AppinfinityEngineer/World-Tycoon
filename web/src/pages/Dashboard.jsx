@@ -32,12 +32,14 @@ function mmss(ms) {
 
 /* balances panel (unchanged) */
 function BalancesPanel() {
-    const [summary, setSummary] = useState({ lastTick: 0, totals: [] });
+    const [summary, setSummary] = useState({ lastTick: 0, intervalSec: 0, totals: [] });
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
+    const poll = useNow(10000); // refresh every 10s
 
     async function fetchSummary() {
         const { data } = await api.get("/economy/summary");
+        // data = { lastTick, intervalSec, totals }
         setSummary(data);
         setLoading(false);
     }
@@ -53,8 +55,11 @@ function BalancesPanel() {
     }
 
     useEffect(() => { fetchSummary(); }, []);
+    useEffect(() => { if (!loading) fetchSummary(); }, [poll]); // background polling
 
-    if (loading) return <div className="p-4 rounded-lg border bg-white text-sm text-gray-500">Loading economy…</div>;
+    if (loading) {
+        return <div className="p-4 rounded-lg border bg-white text-sm text-gray-500">Loading economy…</div>;
+    }
 
     return (
         <div className="p-4 rounded-lg border bg-white">
@@ -92,6 +97,7 @@ function BalancesPanel() {
 
             <div className="text-xs text-gray-400 mt-2">
                 Last tick: {summary.lastTick ? new Date(summary.lastTick).toLocaleString() : "—"}
+                {summary.intervalSec ? ` • Auto-ticking every ${Math.round(summary.intervalSec / 60)} min` : ""}
             </div>
         </div>
     );
