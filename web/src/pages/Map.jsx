@@ -1,61 +1,190 @@
+// src/pages/Map.jsx
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 import api from "../lib/api";
 
-function squareIcon(color = "#22c55e") {
+/* ---------- icons ---------- */
+function squareIcon(color = "#22c55e", selected = false) {
+    const size = selected ? 20 : 16;
+    const radius = selected ? 5 : 4;
+    const ring = selected
+        ? "0 0 0 2px rgba(59,130,246,.30)" // thinner halo
+        : "0 1px 2px rgba(0,0,0,.25)";
     return L.divIcon({
         className: "wt-square-icon",
         html: `<div style="
-      width:16px;height:16px;border-radius:4px;background:${color};
-      box-shadow:0 1px 2px rgba(0,0,0,.25);border:1px solid rgba(0,0,0,.2);
+      width:${size}px;height:${size}px;border-radius:${radius}px;background:${color};
+      box-shadow:${ring};border:1px solid rgba(0,0,0,.25);
     "></div>`,
-        iconSize: [16, 16],
-        iconAnchor: [8, 8],
+        iconSize: [size, size],
+        iconAnchor: [size / 2, size / 2],
     });
 }
 
 const COLORS = ["#22c55e", "#3b82f6", "#f59e0b", "#ef4444"];
 
-function Modal({ children, onClose }) {
-    return createPortal(
-        <div
-            className="fixed inset-0 z-[9999] flex items-center justify-center"
-            onClick={(e) => e.target === e.currentTarget && onClose?.()}
-            onKeyDown={(e) => e.key === "Escape" && onClose?.()}
-            role="dialog"
-            aria-modal="true"
-        >
-            <div className="absolute inset-0 bg-black/40" />
-            <div className="relative w-full max-w-md bg-white rounded-xl border shadow-lg p-4 space-y-3">
-                {children}
-            </div>
-        </div>,
-        document.body
+/* ---------- helpers ---------- */
+function useKey(key, handler) {
+    useEffect(() => {
+        const fn = (e) => {
+            if (e.key === key) handler(e);
+        };
+        window.addEventListener("keydown", fn);
+        return () => window.removeEventListener("keydown", fn);
+    }, [key, handler]);
+}
+
+/* ---------- Drawer ---------- */
+function Drawer({ open, onClose, pin, typeMap, onEdit, onDelete }) {
+    if (!open || !pin) return null;
+
+    const t = typeMap[pin.type || ""] || { name: "—", baseIncome: 0, key: pin.type || "" };
+    const level = Math.min(5, Math.max(1, Number(pin.level || 1)));
+    const income = (t.baseIncome || 0) * level;
+    const bar = pin.color || "#22c55e";
+
+    const showKeyInBrackets =
+        t?.key &&
+        t?.name &&
+        t.key.toLowerCase() !== t.name.toLowerCase();
+
+    return (
+        <div className="fixed inset-0 pointer-events-none z-50">
+            {/* light overlay so the map remains visible but de-emphasized */}
+            <div
+                className="absolute inset-0 bg-black/5"
+                onClick={onClose}
+                aria-hidden
+                style={{ pointerEvents: "auto" }}
+            />
+
+            {/* compact card, not full height, slides in */}
+            <aside
+                className="
+          absolute right-4 top-20 w-[280px]
+          rounded-xl border bg-white shadow-xl
+          overflow-hidden pointer-events-auto
+          animate-[wtSlideIn_.18s_ease-out]
+        "
+                style={{ zIndex: 60 }}
+            >
+                {/* coloured header (Monopoly-style) */}
+                <div
+                    className="w-full h-10 flex items-center justify-center"
+                    style={{ background: bar, color: "#fff" }}
+                >
+                    <div className="px-3 text-sm font-semibold tracking-wide drop-shadow-[0_1px_1px_rgba(0,0,0,.35)]">
+                        {t.name || "—"}
+                    </div>
+                </div>
+
+                {/* header row */}
+                <div className="px-3 py-2 flex items-center justify-between">
+                    <div className="font-semibold tracking-tight text-sm">Pin Details</div>
+                    <div className="flex items-center gap-1">
+                        <button
+                            className="px-2 py-1 rounded border text-xs hover:bg-gray-50"
+                            onClick={onEdit}
+                            title="Edit"
+                        >
+                            Edit
+                        </button>
+                        <button
+                            className="px-2 py-1 rounded border text-xs hover:bg-gray-50"
+                            onClick={onDelete}
+                            title="Delete"
+                        >
+                            Delete
+                        </button>
+                        <button
+                            className="px-2 py-1 rounded border text-xs hover:bg-gray-50"
+                            onClick={onClose}
+                            title="Close"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+
+                {/* body */}
+                <div className="px-3 pb-3 text-[13px] leading-6">
+                    <div className="flex justify-between">
+                        <span className="text-gray-500">Owner</span>
+                        <span className="font-medium">{pin.owner || "—"}</span>
+                    </div>
+
+                    <div className="flex justify-between">
+                        <span className="text-gray-500">Type</span>
+                        <span className="font-medium">
+                            {t.name || pin.type || "—"}
+                            {showKeyInBrackets && (
+                                <span className="text-gray-400"> ({t.key})</span>
+                            )}
+                        </span>
+                    </div>
+
+                    <div className="flex justify-between">
+                        <span className="text-gray-500">Level</span>
+                        <span className="font-medium">{level}</span>
+                    </div>
+
+                    <div className="flex justify-between">
+                        <span className="text-gray-500">Income</span>
+                        <span className="font-medium">+{income} / tick</span>
+                    </div>
+
+                    <div className="mt-1 flex items-center justify-between">
+                        <span className="text-gray-500">Color</span>
+                        <span
+                            className="inline-block align-middle rounded border"
+                            style={{
+                                width: 12,
+                                height: 12,
+                                background: bar,
+                                borderColor: "rgba(0,0,0,.15)",
+                            }}
+                        />
+                    </div>
+
+                    <div className="mt-2 text-[11px] text-gray-400">
+                        id: {pin.id?.slice(0, 8) ?? "—"} · lat: {pin.lat?.toFixed(5)} · lng:{" "}
+                        {pin.lng?.toFixed(5)}
+                    </div>
+                </div>
+            </aside>
+
+            {/* tiny keyframes (Tailwind inline) */}
+            <style>{`
+        @keyframes wtSlideIn {
+          0% { transform: translateX(12px); opacity: .0; }
+          100% { transform: translateX(0); opacity: 1; }
+        }
+      `}</style>
+        </div>
     );
 }
 
+/* ---------- Map Page ---------- */
 export default function MapPage() {
     const [pins, setPins] = useState([]);
     const [colorIdx, setColorIdx] = useState(0);
     const [loading, setLoading] = useState(true);
-    const [editing, setEditing] = useState(null);
-    const [types, setTypes] = useState([]);
+    const [selectedId, setSelectedId] = useState(null);
+    const [editing, setEditing] = useState(null); // reuse the simple edit modal
+    const [typeMap, setTypeMap] = useState({}); // key -> {name, baseIncome, key}
 
+    // esc closes drawer
+    useKey("Escape", () => setSelectedId(null));
+
+    /* ---- server sync ---- */
     async function fetchPins() {
-        const { data } = await api.get("/pins");
-        setPins(data ?? []);
-        setLoading(false);
-    }
-
-    async function fetchTypes() {
         try {
-            const { data } = await api.get("/types");
-            setTypes(Array.isArray(data) ? data : []);
-        } catch (e) {
-            setTypes([]);
+            const { data } = await api.get("/pins");
+            setPins(data ?? []);
+        } finally {
+            setLoading(false);
         }
     }
 
@@ -63,39 +192,57 @@ export default function MapPage() {
         try {
             const { data } = await api.post("/pins", { lat, lng, color });
             setPins((prev) => [...prev, data]);
-        } catch { }
+        } catch (e) {
+            console.error("addPin failed", e);
+        }
     }
 
     async function clearServerPins() {
         try {
             await api.delete("/pins");
             setPins([]);
-            setEditing(null);
-        } catch { }
+            setSelectedId(null);
+        } catch (e) {
+            console.error("clearPins failed", e);
+        }
     }
 
     async function deletePin(id) {
         try {
             await api.delete(`/pins/${id}`);
             setPins((prev) => prev.filter((p) => p.id !== id));
-            if (editing?.id === id) setEditing(null);
-        } catch { }
+            if (selectedId === id) setSelectedId(null);
+        } catch (e) {
+            console.error("deletePin failed", e);
+        }
     }
 
-    async function saveEdit() {
-        if (!editing?.id) return;
-        const { id, type, owner, level, color } = editing;
-        const lvl = Number.isFinite(level) ? level : 1;
+    async function patchPin(update) {
+        const { id, type, owner, level, color } = update;
         try {
-            const { data } = await api.patch(`/pins/${id}`, {
-                type: type || null,
-                owner: owner || "",
-                level: lvl,
-                color: color || COLORS[0],
-            });
+            const { data } = await api.patch(`/pins/${id}`, { type, owner, level, color });
             setPins((prev) => prev.map((x) => (x.id === id ? data : x)));
-            setEditing(null);
-        } catch (e) { }
+        } catch (e) {
+            console.error("patchPin failed", e);
+        }
+    }
+
+    async function fetchTypes() {
+        try {
+            const { data } = await api.get("/types");
+            const map = {};
+            (data || []).forEach((t) => {
+                map[t.key] = {
+                    key: t.key,
+                    name: t.name || t.key,
+                    baseIncome: Number(t.baseIncome || 0),
+                };
+            });
+            setTypeMap(map);
+        } catch (e) {
+            console.error("types fetch failed", e);
+            setTypeMap({});
+        }
     }
 
     useEffect(() => {
@@ -103,6 +250,7 @@ export default function MapPage() {
         fetchTypes();
     }, []);
 
+    // click-to-add using server
     function ClickToAdd({ colorIdx }) {
         useMapEvents({
             click(e) {
@@ -113,6 +261,7 @@ export default function MapPage() {
         return null;
     }
 
+    /* ---- dev helpers: save/load JSON ---- */
     function downloadPins(list) {
         const blob = new Blob([JSON.stringify(list, null, 2)], {
             type: "application/json",
@@ -133,6 +282,7 @@ export default function MapPage() {
         try {
             const data = JSON.parse(text);
             if (!Array.isArray(data)) return;
+
             await clearServerPins();
             for (const p of data) {
                 if (typeof p?.lat === "number" && typeof p?.lng === "number") {
@@ -140,14 +290,17 @@ export default function MapPage() {
                     await addPin(p.lat, p.lng, color);
                 }
             }
-        } catch { }
+        } catch (err) {
+            console.error("uploadPins failed", err);
+        }
     }
 
     const centerUK = useMemo(() => [52.8, -2.2], []);
 
-    const typeOptions = types.map((t) => t.key);
-    const selectedMeta =
-        editing && editing.type ? types.find((t) => t.key === editing.type) : null;
+    const selectedPin = useMemo(
+        () => pins.find((p) => p.id === selectedId) || null,
+        [pins, selectedId]
+    );
 
     return (
         <div className="p-4">
@@ -170,15 +323,20 @@ export default function MapPage() {
                 </button>
                 <label className="px-3 py-2 rounded-lg border cursor-pointer">
                     Load Layout
-                    <input type="file" accept="application/json" className="hidden" onChange={uploadPins} />
+                    <input
+                        type="file"
+                        accept="application/json"
+                        className="hidden"
+                        onChange={uploadPins}
+                    />
                 </label>
             </div>
 
             <MapContainer
+                className="rounded-xl border relative z-0"
                 center={centerUK}
                 zoom={12}
                 style={{ height: 560, width: "100%" }}
-                className="rounded-xl border"
             >
                 <TileLayer
                     attribution="&copy; OpenStreetMap"
@@ -187,88 +345,96 @@ export default function MapPage() {
 
                 {!loading && <ClickToAdd colorIdx={colorIdx} />}
 
-                {pins.map((p) => (
-                    <Marker
-                        key={p.id ?? `${p.lat},${p.lng}`}
-                        position={[p.lat, p.lng]}
-                        icon={squareIcon(p.color)}
-                        eventHandlers={{
-                            click: () => setEditing({ ...p }),
-                            contextmenu: () => p.id && deletePin(p.id),
-                        }}
-                    />
-                ))}
+                {pins.map((p) => {
+                    const isSel = p.id === selectedId;
+                    return (
+                        <Marker
+                            key={p.id ?? `${p.lat},${p.lng}`}
+                            position={[p.lat, p.lng]}
+                            icon={squareIcon(p.color, isSel)}
+                            eventHandlers={{
+                                click: () => setSelectedId(p.id || null),
+                                contextmenu: () => p.id && deletePin(p.id),
+                            }}
+                        />
+                    );
+                })}
             </MapContainer>
 
+            {/* Drawer */}
+            <Drawer
+                open={!!selectedPin}
+                pin={selectedPin}
+                typeMap={typeMap}
+                onClose={() => setSelectedId(null)}
+                onEdit={() => selectedPin && setEditing({ ...selectedPin })}
+                onDelete={() => selectedPin?.id && deletePin(selectedPin.id)}
+            />
+
+            {/* Simple Edit Modal (same as previous branch behaviour) */}
             {editing && (
-                <Modal onClose={() => setEditing(null)}>
-                    <div className="font-medium">Edit Pin</div>
-
-                    <div className="space-y-2">
-                        <label className="block text-sm text-gray-600">Type</label>
-                        <select
+                <div className="fixed inset-0 bg-black/30 grid place-items-center z-50">
+                    <div className="w-[420px] rounded-xl border bg-white p-4 space-y-3">
+                        <div className="font-medium">Edit Pin</div>
+                        <input
                             className="w-full border rounded px-3 py-2"
-                            value={editing.type ?? ""}
+                            placeholder="Type (e.g., Data Center)"
+                            value={editing.type || ""}
                             onChange={(e) =>
-                                setEditing((s) => ({ ...s, type: e.target.value || null }))
-                            }
-                        >
-                            <option value="">— None —</option>
-                            {typeOptions.map((k) => (
-                                <option key={k} value={k}>
-                                    {k}
-                                </option>
-                            ))}
-                        </select>
-                        {selectedMeta && (
-                            <div className="text-xs text-gray-500">
-                                Base income: {selectedMeta.baseIncome} · {selectedMeta.tags.join(", ")}
-                            </div>
-                        )}
-                    </div>
-
-                    <input
-                        className="w-full border rounded px-3 py-2"
-                        placeholder="Owner"
-                        value={editing.owner ?? ""}
-                        onChange={(e) => setEditing((s) => ({ ...s, owner: e.target.value }))}
-                    />
-
-                    <div className="flex gap-2">
-                        <input
-                            type="number"
-                            className="flex-1 border rounded px-3 py-2"
-                            placeholder="Level"
-                            min={1}
-                            max={5}
-                            value={Number.isFinite(editing.level) ? editing.level : 1}
-                            onChange={(e) =>
-                                setEditing((s) => ({
-                                    ...s,
-                                    level: Math.max(1, Math.min(5, Number(e.target.value || 1))),
-                                }))
+                                setEditing((s) => ({ ...s, type: e.target.value }))
                             }
                         />
                         <input
-                            className="flex-1 border rounded px-3 py-2"
-                            placeholder="#hex color"
-                            value={editing.color ?? COLORS[0]}
-                            onChange={(e) => setEditing((s) => ({ ...s, color: e.target.value }))}
+                            className="w-full border rounded px-3 py-2"
+                            placeholder="Owner"
+                            value={editing.owner || ""}
+                            onChange={(e) =>
+                                setEditing((s) => ({ ...s, owner: e.target.value }))
+                            }
                         />
+                        <div className="flex gap-2">
+                            <input
+                                type="number"
+                                className="flex-1 border rounded px-3 py-2"
+                                placeholder="Level"
+                                value={editing.level ?? 1}
+                                min={1}
+                                max={5}
+                                onChange={(e) =>
+                                    setEditing((s) => ({
+                                        ...s,
+                                        level: Number(e.target.value || 1),
+                                    }))
+                                }
+                            />
+                            <input
+                                className="flex-1 border rounded px-3 py-2"
+                                placeholder="#hex color"
+                                value={editing.color || "#22c55e"}
+                                onChange={(e) =>
+                                    setEditing((s) => ({ ...s, color: e.target.value }))
+                                }
+                            />
+                        </div>
+                        <div className="flex justify-end gap-2">
+                            <button
+                                className="px-3 py-2 border rounded"
+                                onClick={() => setEditing(null)}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                className="px-3 py-2 border rounded bg-indigo-600 text-white"
+                                onClick={async () => {
+                                    await patchPin(editing);
+                                    setEditing(null);
+                                }}
+                            >
+                                Save
+                            </button>
+                        </div>
                     </div>
-
-                    <div className="flex justify-end gap-2">
-                        <button className="px-3 py-2 border rounded" onClick={() => setEditing(null)}>
-                            Cancel
-                        </button>
-                        <button
-                            className="px-3 py-2 border rounded bg-indigo-600 text-white"
-                            onClick={saveEdit}
-                        >
-                            Save
-                        </button>
-                    </div>
-                </Modal>
+                </div>
             )}
         </div>
     );
