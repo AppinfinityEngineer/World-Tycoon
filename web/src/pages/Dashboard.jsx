@@ -1,54 +1,131 @@
 import { useEffect, useState } from "react";
 import api from "../lib/api";
+import { useAuth } from "../store/auth";
 
-function StatCard({ title, value, sub }) {
+/* small stat card */
+function Card({ title, value, hint }) {
     return (
-        <div className="bg-white rounded-lg shadow p-4">
+        <div className="p-4 rounded-lg border bg-white">
             <div className="text-sm text-gray-500">{title}</div>
             <div className="text-2xl font-semibold mt-1">{value}</div>
-            {sub && <div className="text-xs text-gray-400 mt-1">{sub}</div>}
+            {hint && <div className="text-xs text-gray-400 mt-1">{hint}</div>}
+        </div>
+    );
+}
+
+/* events panel (backend-wired) */
+function EventsPanel() {
+    const [events, setEvents] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    async function fetchEvents() {
+        const { data } = await api.get("/events");
+        setEvents(data);
+        setLoading(false);
+    }
+    useEffect(() => { fetchEvents(); }, []);
+
+    async function add(type, city, note, cdMins) {
+        const { data } = await api.post("/events", { type, city, note, cdMins });
+        setEvents((prev) => [data, ...prev].slice(0, 200));
+    }
+
+    async function clearAll() {
+        await api.delete("/events");
+        setEvents([]);
+    }
+
+    if (loading) {
+        return (
+            <div className="p-4 rounded-lg border bg-white text-sm text-gray-500">
+                Loading events…
+            </div>
+        );
+    }
+
+    return (
+        <div className="p-4 rounded-lg border bg-white">
+            <div className="mb-3 flex items-center justify-between">
+                <div className="font-medium">Influence Ops — Recent Events</div>
+                <div className="flex items-center gap-2">
+                    <button
+                        className="px-3 py-2 rounded-lg border"
+                        onClick={() => add("Power Outage", "Neo London", "Blocked by Generator Upgrade", 45)}
+                    >
+                        + Power Outage
+                    </button>
+                    <button
+                        className="px-3 py-2 rounded-lg border"
+                        onClick={() => add("Media Scandal", "Metro York", "PR Office mitigated 60%", 55)}
+                    >
+                        + Media Scandal
+                    </button>
+                    <button className="px-3 py-2 rounded-lg border" onClick={clearAll}>
+                        Clear
+                    </button>
+                </div>
+            </div>
+
+            {events.length === 0 && (
+                <div className="text-sm text-gray-500 mb-3">No events yet.</div>
+            )}
+
+            <ul className="divide-y">
+                {events.map((e, i) => (
+                    <li key={i} className="py-2 flex items-start justify-between">
+                        <div>
+                            <div className="font-medium">
+                                {e.type} — {e.city}
+                            </div>
+                            <div className="text-sm text-gray-500">{e.note}</div>
+                        </div>
+                        <span className="text-xs text-gray-500">CD {e.cdMins}m</span>
+                    </li>
+                ))}
+            </ul>
         </div>
     );
 }
 
 export default function Dashboard() {
-    const [stats, setStats] = useState({ users: 0, waitlist: 0 });
-    const [exp, setExp] = useState("-");
+    const { token } = useAuth();
+    const [stats, setStats] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [err, setErr] = useState("");
 
     useEffect(() => {
-        let t;
-        try {
-            t = localStorage.getItem("wt_token");
-            if (t) {
-                const payload = JSON.parse(atob(t.split(".")[1]));
-                if (payload?.exp) {
-                    const ms = payload.exp * 1000 - Date.now();
-                    setExp(ms > 0 ? Math.ceil(ms / 60000) + " min" : "expired");
-                }
-            }
-        } catch { }
-
+        let ignore = false;
         (async () => {
             try {
                 const { data } = await api.get("/stats/overview");
-                setStats(data);
+                if (!ignore) setStats(data);
             } catch {
-                // leave defaults
+                setErr("Couldn’t load stats");
+            } finally {
+                if (!ignore) setLoading(false);
             }
         })();
-    }, []);
+        return () => { ignore = true; };
+    }, [token]);
+
+    if (loading) return <div className="animate-pulse text-gray-500">Loading…</div>;
+    if (err) return <div className="text-red-600">{err}</div>;
 
     return (
-        <>
-            <h2 className="text-2xl font-semibold mb-4">Dashboard Overview</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-                <StatCard title="Active Users" value={stats.users} />
-                <StatCard title="Waitlist" value={stats.waitlist} />
-                <StatCard title="Your Token Expires In" value={exp} sub="HS256 JWT" />
+        <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <Card title="Active Users" value={stats?.users ?? "—"} />
+                <Card title="Waitlist" value={stats?.waitlist ?? "—"} />
+                <Card title="Your Token" value="Active" hint="Auto-refresh on expiry" />
+                <Card title="Season Ends In" value="—" hint="Add in Phase 6" />
             </div>
-            <div className="border border-dashed border-gray-400 p-8 text-center text-gray-500 rounded-lg bg-white">
-                Map or game UI will appear here.
+
+            <EventsPanel />
+
+            <div className="p-4 rounded-lg border bg-white">
+                <div className="font-medium mb-2">Recent Activity</div>
+                <div className="text-sm text-gray-600">Coming soon (Phase 3+)</div>
             </div>
-        </>
+        </div>
     );
 }
