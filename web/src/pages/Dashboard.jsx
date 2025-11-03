@@ -1,3 +1,4 @@
+// src/pages/Dashboard.jsx
 import { useEffect, useState } from "react";
 import api from "../lib/api";
 import { useAuth } from "../store/auth";
@@ -13,17 +14,36 @@ function Card({ title, value, hint }) {
     );
 }
 
+/* tiny hooks/utils for timers */
+function useNow(intervalMs = 1000) {
+    const [now, setNow] = useState(Date.now());
+    useEffect(() => {
+        const id = setInterval(() => setNow(Date.now()), intervalMs);
+        return () => clearInterval(id);
+    }, [intervalMs]);
+    return now;
+}
+function mmss(ms) {
+    if (ms <= 0) return "00:00";
+    const m = Math.floor(ms / 60000);
+    const s = Math.floor((ms % 60000) / 1000);
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
 /* events panel (backend-wired) */
 function EventsPanel() {
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
+    const now = useNow(1000); // tick every second
 
     async function fetchEvents() {
         const { data } = await api.get("/events");
         setEvents(data);
         setLoading(false);
     }
-    useEffect(() => { fetchEvents(); }, []);
+    useEffect(() => {
+        fetchEvents();
+    }, []);
 
     async function add(type, city, note, cdMins) {
         const { data } = await api.post("/events", { type, city, note, cdMins });
@@ -50,13 +70,17 @@ function EventsPanel() {
                 <div className="flex items-center gap-2">
                     <button
                         className="px-3 py-2 rounded-lg border"
-                        onClick={() => add("Power Outage", "Neo London", "Blocked by Generator Upgrade", 45)}
+                        onClick={() =>
+                            add("Power Outage", "Neo London", "Blocked by Generator Upgrade", 45)
+                        }
                     >
                         + Power Outage
                     </button>
                     <button
                         className="px-3 py-2 rounded-lg border"
-                        onClick={() => add("Media Scandal", "Metro York", "PR Office mitigated 60%", 55)}
+                        onClick={() =>
+                            add("Media Scandal", "Metro York", "PR Office mitigated 60%", 55)
+                        }
                     >
                         + Media Scandal
                     </button>
@@ -71,17 +95,32 @@ function EventsPanel() {
             )}
 
             <ul className="divide-y">
-                {events.map((e, i) => (
-                    <li key={i} className="py-2 flex items-start justify-between">
-                        <div>
-                            <div className="font-medium">
-                                {e.type} — {e.city}
+                {events.map((e, i) => {
+                    const created = typeof e.t === "number" ? e.t : Date.now();
+                    const cd = typeof e.cdMins === "number" ? e.cdMins : 0;
+                    const endAt = created + cd * 60 * 1000;
+                    const remain = endAt - now;
+                    const expired = remain <= 0;
+
+                    return (
+                        <li key={i} className="py-2 flex items-start justify-between">
+                            <div>
+                                <div className="font-medium">
+                                    {e.type} — {e.city}
+                                </div>
+                                <div className="text-sm text-gray-500">{e.note}</div>
                             </div>
-                            <div className="text-sm text-gray-500">{e.note}</div>
-                        </div>
-                        <span className="text-xs text-gray-500">CD {e.cdMins}m</span>
-                    </li>
-                ))}
+                            <span
+                                className={
+                                    "text-xs " + (expired ? "text-gray-400" : "text-gray-600")
+                                }
+                                title={expired ? "Cooldown complete" : "Cooldown running"}
+                            >
+                                {expired ? "CD 00:00" : `CD ${mmss(remain)}`}
+                            </span>
+                        </li>
+                    );
+                })}
             </ul>
         </div>
     );
@@ -105,7 +144,9 @@ export default function Dashboard() {
                 if (!ignore) setLoading(false);
             }
         })();
-        return () => { ignore = true; };
+        return () => {
+            ignore = true;
+        };
     }, [token]);
 
     if (loading) return <div className="animate-pulse text-gray-500">Loading…</div>;

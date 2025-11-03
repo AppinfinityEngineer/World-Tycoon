@@ -3,10 +3,20 @@
     "lat": 52.802138732602735,
     "lng": -2.235374450683594,
     "color": "#22c55e",
-    "type": null,
-    "owner": null,
+    "type": "test",
+    "owner": "Richy P",
     "level": 1,
     "id": "48894803d82d453f8baad0869301b5a4",
     "createdAt": 1762186633467
+  },
+  {
+    "lat": 52.80711994548586,
+    "lng": -2.229881286621094,
+    "color": "#f59e0b",
+    "type": null,
+    "owner": null,
+    "level": 1,
+    "id": "6be8486c5a534e1e926a1633849c67b5",
+    "createdAt": 1762187566577
   }
 ]
