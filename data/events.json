@@ -1,1 +1,16 @@
-[]
+[
+  {
+    "type": "Power Outage",
+    "city": "Neo London",
+    "note": "Blocked by Generator Upgrade",
+    "cdMins": 45,
+    "t": 1762202315504
+  },
+  {
+    "type": "Media Scandal",
+    "city": "Metro York",
+    "note": "PR Office mitigated 60%",
+    "cdMins": 55,
+    "t": 1762202323241
+  }
+]
