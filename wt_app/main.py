@@ -2,8 +2,12 @@ from fastapi import FastAPI
 from wt_app.core.config import settings
 from wt_app.db.base import async_session, init_db
 from wt_app.api.auth import router as auth_router   # <-- IMPORTANT
+from wt_app.api.admin import router as admin_router
+
 
 app = FastAPI(title="World Tycoon")
+app.include_router(admin_router)
+
 
 @app.on_event("startup")
 async def _startup():
@@ -27,6 +31,9 @@ async def _dbg_users():
         count = (await s.execute(select(func.count()).select_from(User))).scalar_one()
         rows = (await s.execute(select(User.id, User.email))).all()
         return {"user_count": count, "users": [dict(r._mapping) for r in rows]}
+    
+
+
 # ------------------------------------------------
 
 # Mount auth endpoints
