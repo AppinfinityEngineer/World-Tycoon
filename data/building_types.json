@@ -1,0 +1,48 @@
+[
+    {
+        "key": "Data Center",
+        "baseIncome": 12,
+        "tags": [
+            "infra",
+            "power"
+        ]
+    },
+    {
+        "key": "Solar Farm",
+        "baseIncome": 8,
+        "tags": [
+            "green",
+            "power"
+        ]
+    },
+    {
+        "key": "PR Office",
+        "baseIncome": 5,
+        "tags": [
+            "media",
+            "defense"
+        ]
+    },
+    {
+        "key": "Generator Upgrade",
+        "baseIncome": 0,
+        "tags": [
+            "defense",
+            "aura"
+        ]
+    },
+    {
+        "key": "Media Tower",
+        "baseIncome": 9,
+        "tags": [
+            "media"
+        ]
+    },
+    {
+        "key": "HQ",
+        "baseIncome": 3,
+        "tags": [
+            "admin"
+        ]
+    }
+]

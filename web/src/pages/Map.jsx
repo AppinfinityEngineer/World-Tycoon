@@ -1,10 +1,9 @@
-// src/pages/Map.jsx
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { useEffect, useMemo, useState } from "react";
-import api from "../lib/api";
 import { createPortal } from "react-dom";
+import api from "../lib/api";
 
 function squareIcon(color = "#22c55e") {
     return L.divIcon({
@@ -21,20 +20,15 @@ function squareIcon(color = "#22c55e") {
 const COLORS = ["#22c55e", "#3b82f6", "#f59e0b", "#ef4444"];
 
 function Modal({ children, onClose }) {
-    // portal ensures we're above everything (Leaflet panes, headers, etc.)
     return createPortal(
         <div
             className="fixed inset-0 z-[9999] flex items-center justify-center"
-            onClick={(e) => {
-                if (e.target === e.currentTarget) onClose?.();
-            }}
+            onClick={(e) => e.target === e.currentTarget && onClose?.()}
             onKeyDown={(e) => e.key === "Escape" && onClose?.()}
             role="dialog"
             aria-modal="true"
         >
-            {/* backdrop */}
             <div className="absolute inset-0 bg-black/40" />
-            {/* dialog */}
             <div className="relative w-full max-w-md bg-white rounded-xl border shadow-lg p-4 space-y-3">
                 {children}
             </div>
@@ -47,17 +41,21 @@ export default function MapPage() {
     const [pins, setPins] = useState([]);
     const [colorIdx, setColorIdx] = useState(0);
     const [loading, setLoading] = useState(true);
-
-    // edit state: { id,type,owner,level,color,lat,lng,createdAt }
     const [editing, setEditing] = useState(null);
+    const [types, setTypes] = useState([]);
 
-    // ---- server sync ----
     async function fetchPins() {
+        const { data } = await api.get("/pins");
+        setPins(data ?? []);
+        setLoading(false);
+    }
+
+    async function fetchTypes() {
         try {
-            const { data } = await api.get("/pins");
-            setPins(data ?? []);
-        } finally {
-            setLoading(false);
+            const { data } = await api.get("/types");
+            setTypes(Array.isArray(data) ? data : []);
+        } catch (e) {
+            setTypes([]);
         }
     }
 
@@ -65,18 +63,15 @@ export default function MapPage() {
         try {
             const { data } = await api.post("/pins", { lat, lng, color });
             setPins((prev) => [...prev, data]);
-        } catch (e) {
-            console.error("addPin failed", e);
-        }
+        } catch { }
     }
 
     async function clearServerPins() {
         try {
             await api.delete("/pins");
             setPins([]);
-        } catch (e) {
-            console.error("clearPins failed", e);
-        }
+            setEditing(null);
+        } catch { }
     }
 
     async function deletePin(id) {
@@ -84,33 +79,30 @@ export default function MapPage() {
             await api.delete(`/pins/${id}`);
             setPins((prev) => prev.filter((p) => p.id !== id));
             if (editing?.id === id) setEditing(null);
-        } catch (e) {
-            console.error("deletePin failed", e);
-        }
+        } catch { }
     }
 
     async function saveEdit() {
         if (!editing?.id) return;
         const { id, type, owner, level, color } = editing;
+        const lvl = Number.isFinite(level) ? level : 1;
         try {
             const { data } = await api.patch(`/pins/${id}`, {
-                type: type ?? "",
-                owner: owner ?? "",
-                level: typeof level === "number" ? level : 1,
-                color: color ?? COLORS[0],
+                type: type || null,
+                owner: owner || "",
+                level: lvl,
+                color: color || COLORS[0],
             });
             setPins((prev) => prev.map((x) => (x.id === id ? data : x)));
             setEditing(null);
-        } catch (e) {
-            console.error("saveEdit failed", e);
-        }
+        } catch (e) { }
     }
 
     useEffect(() => {
         fetchPins();
+        fetchTypes();
     }, []);
 
-    // click-to-add using server
     function ClickToAdd({ colorIdx }) {
         useMapEvents({
             click(e) {
@@ -121,7 +113,6 @@ export default function MapPage() {
         return null;
     }
 
-    // ---- dev helpers: save/load JSON ----
     function downloadPins(list) {
         const blob = new Blob([JSON.stringify(list, null, 2)], {
             type: "application/json",
@@ -142,8 +133,6 @@ export default function MapPage() {
         try {
             const data = JSON.parse(text);
             if (!Array.isArray(data)) return;
-
-            // Replace server state with uploaded layout
             await clearServerPins();
             for (const p of data) {
                 if (typeof p?.lat === "number" && typeof p?.lng === "number") {
@@ -151,12 +140,14 @@ export default function MapPage() {
                     await addPin(p.lat, p.lng, color);
                 }
             }
-        } catch (err) {
-            console.error("uploadPins failed", err);
-        }
+        } catch { }
     }
 
     const centerUK = useMemo(() => [52.8, -2.2], []);
+
+    const typeOptions = types.map((t) => t.key);
+    const selectedMeta =
+        editing && editing.type ? types.find((t) => t.key === editing.type) : null;
 
     return (
         <div className="p-4">
@@ -171,7 +162,10 @@ export default function MapPage() {
                 <button className="px-3 py-2 rounded-lg border" onClick={clearServerPins}>
                     Clear Pins
                 </button>
-                <button className="px-3 py-2 rounded-lg border" onClick={() => downloadPins(pins)}>
+                <button
+                    className="px-3 py-2 rounded-lg border"
+                    onClick={() => downloadPins(pins)}
+                >
                     Save Layout
                 </button>
                 <label className="px-3 py-2 rounded-lg border cursor-pointer">
@@ -199,24 +193,40 @@ export default function MapPage() {
                         position={[p.lat, p.lng]}
                         icon={squareIcon(p.color)}
                         eventHandlers={{
-                            click: () => setEditing({ ...p }),            // open edit
-                            contextmenu: () => p.id && deletePin(p.id),   // right-click delete
+                            click: () => setEditing({ ...p }),
+                            contextmenu: () => p.id && deletePin(p.id),
                         }}
                     />
                 ))}
             </MapContainer>
 
-            {/* Edit modal */}
             {editing && (
                 <Modal onClose={() => setEditing(null)}>
                     <div className="font-medium">Edit Pin</div>
 
-                    <input
-                        className="w-full border rounded px-3 py-2"
-                        placeholder="Type (e.g., Data Center)"
-                        value={editing.type ?? ""}
-                        onChange={(e) => setEditing((s) => ({ ...s, type: e.target.value }))}
-                    />
+                    <div className="space-y-2">
+                        <label className="block text-sm text-gray-600">Type</label>
+                        <select
+                            className="w-full border rounded px-3 py-2"
+                            value={editing.type ?? ""}
+                            onChange={(e) =>
+                                setEditing((s) => ({ ...s, type: e.target.value || null }))
+                            }
+                        >
+                            <option value="">— None —</option>
+                            {typeOptions.map((k) => (
+                                <option key={k} value={k}>
+                                    {k}
+                                </option>
+                            ))}
+                        </select>
+                        {selectedMeta && (
+                            <div className="text-xs text-gray-500">
+                                Base income: {selectedMeta.baseIncome} · {selectedMeta.tags.join(", ")}
+                            </div>
+                        )}
+                    </div>
+
                     <input
                         className="w-full border rounded px-3 py-2"
                         placeholder="Owner"
@@ -229,15 +239,20 @@ export default function MapPage() {
                             type="number"
                             className="flex-1 border rounded px-3 py-2"
                             placeholder="Level"
+                            min={1}
+                            max={5}
                             value={Number.isFinite(editing.level) ? editing.level : 1}
                             onChange={(e) =>
-                                setEditing((s) => ({ ...s, level: Number(e.target.value || 1) }))
+                                setEditing((s) => ({
+                                    ...s,
+                                    level: Math.max(1, Math.min(5, Number(e.target.value || 1))),
+                                }))
                             }
                         />
                         <input
                             className="flex-1 border rounded px-3 py-2"
                             placeholder="#hex color"
-                            value={editing.color ?? "#22c55e"}
+                            value={editing.color ?? COLORS[0]}
                             onChange={(e) => setEditing((s) => ({ ...s, color: e.target.value }))}
                         />
                     </div>
