@@ -1,51 +1,82 @@
-import { useEffect, useRef, useState } from "react";
+// src/pages/Map.jsx
+import "leaflet/dist/leaflet.css";
+import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
+import { useEffect, useMemo, useState } from "react";
 
-const LS_KEY = "wt_map_view";
+function squareIcon(color = "#22c55e") {
+    return L.divIcon({
+        className: "wt-square-icon",
+        html: `<div style="
+      width:16px;height:16px;
+      border-radius:4px;
+      background:${color};
+      box-shadow:0 1px 2px rgba(0,0,0,.25);
+      border:1px solid rgba(0,0,0,.2);
+    "></div>`,
+        iconSize: [16, 16],
+        iconAnchor: [8, 8],
+    });
+}
+
+const COLORS = ["#22c55e", "#3b82f6", "#f59e0b", "#ef4444"];
+
+function ClickToAdd({ colorIdx, onAdd }) {
+    useMapEvents({
+        click(e) {
+            const c = COLORS[colorIdx % COLORS.length];
+            onAdd({ lat: e.latlng.lat, lng: e.latlng.lng, color: c });
+        },
+    });
+    return null;
+}
 
 export default function MapPage() {
-    const ref = useRef(null);
-    const [map, setMap] = useState(null);
-    const [pins, setPins] = useState([]);
+    const [pins, setPins] = useState(() => {
+        try { return JSON.parse(localStorage.getItem("wt_pins") || "[]"); }
+        catch { return []; }
+    });
+    const [colorIdx, setColorIdx] = useState(0);
 
     useEffect(() => {
-        if (map) return;
-        const root = ref.current;
-        const saved = JSON.parse(localStorage.getItem(LS_KEY) || "{}");
-        const m = L.map(root).setView(saved.center || [51.5, -0.1], saved.zoom || 6);
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-            attribution: "© OpenStreetMap",
-            maxZoom: 19
-        }).addTo(m);
-        m.on("moveend zoomend", () => {
-            localStorage.setItem(LS_KEY, JSON.stringify({ center: m.getCenter(), zoom: m.getZoom() }));
-        });
-        setMap(m);
-    }, [map]);
+        localStorage.setItem("wt_pins", JSON.stringify(pins));
+    }, [pins]);
 
-    useEffect(() => {
-        return () => { map?.remove(); };
-    }, [map]);
-
-    const addPin = () => {
-        if (!map) return;
-        const c = map.getCenter();
-        const marker = L.circleMarker([c.lat, c.lng], { radius: 8, weight: 2, fillOpacity: 0.6 });
-        marker.addTo(map);
-        setPins(p => [...p, marker]);
-    };
-
-    const centerUK = () => map?.setView([51.5, -0.1], 6);
-    const clearPins = () => { pins.forEach(p => p.remove()); setPins([]); };
+    const centerUK = useMemo(() => [52.8, -2.2], []);
 
     return (
-        <div className="space-y-3">
-            <div className="flex gap-2">
-                <button onClick={centerUK} className="px-3 py-1.5 rounded bg-gray-200">Center UK</button>
-                <button onClick={addPin} className="px-3 py-1.5 rounded bg-indigo-600 text-white">Add Pin</button>
-                <button onClick={clearPins} className="px-3 py-1.5 rounded bg-gray-200">Clear Pins</button>
+        <div className="p-4">
+            <div className="mb-4 flex items-center gap-2">
+                <button
+                    className="px-3 py-2 rounded-lg border"
+                    onClick={() => setColorIdx((i) => i + 1)}
+                    title="Cycle pin color for next click"
+                >
+                    Add Pin (color: {["green", "blue", "amber", "red"][colorIdx % 4]})
+                </button>
+                <button className="px-3 py-2 rounded-lg border" onClick={() => setPins([])}>
+                    Clear Pins
+                </button>
             </div>
-            <div ref={ref} className="h-[70vh] rounded-lg border overflow-hidden" />
+
+            <MapContainer
+                center={centerUK}
+                zoom={6}
+                style={{ height: 560, width: "100%" }}
+                className="rounded-xl border"
+            >
+                <TileLayer
+                    attribution="&copy; OpenStreetMap"
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
+                <ClickToAdd
+                    colorIdx={colorIdx}
+                    onAdd={(p) => setPins((prev) => [...prev, p])}
+                />
+                {pins.map((p, i) => (
+                    <Marker key={i} position={[p.lat, p.lng]} icon={squareIcon(p.color)} />
+                ))}
+            </MapContainer>
         </div>
     );
 }
