@@ -1,8 +1,12 @@
+# wt_app/api/economy.py
+import os
+import json
+import time
+from pathlib import Path
+from typing import Dict, List
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from pathlib import Path
-import json, time
-from typing import Dict, List
 
 router = APIRouter(prefix="/economy", tags=["economy"])
 
@@ -11,11 +15,21 @@ PINS_FILE = DATA / "pins.json"
 TYPES_FILE = DATA / "building_types.json"
 ECO_FILE = DATA / "economy.json"
 
+
+# ---------- helpers ----------
+def _interval_sec() -> int:
+    """Auto-tick interval (seconds), default 5 minutes, env override WT_AUTO_TICK_MIN."""
+    try:
+        return int(float(os.getenv("WT_AUTO_TICK_MIN", "5")) * 60)
+    except Exception:
+        return 300
+
 def _now_ms() -> int:
     return int(time.time() * 1000)
 
 def _read_json(path: Path, default):
-    if not path.exists(): return default
+    if not path.exists():
+        return default
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
@@ -26,7 +40,11 @@ def _write_json(path: Path, obj) -> None:
 
 def _type_income_map() -> Dict[str, int]:
     raw = _read_json(TYPES_FILE, [])
-    return {r["key"]: int(r.get("baseIncome", 0)) for r in raw if isinstance(r, dict) and "key" in r}
+    return {
+        r["key"]: int(r.get("baseIncome", 0))
+        for r in raw
+        if isinstance(r, dict) and "key" in r
+    }
 
 def _load_pins() -> List[dict]:
     raw = _read_json(PINS_FILE, [])
@@ -34,13 +52,17 @@ def _load_pins() -> List[dict]:
 
 def _load_economy() -> dict:
     eco = _read_json(ECO_FILE, {})
-    if "balances" not in eco: eco["balances"] = {}  # owner -> int
-    if "lastTick" not in eco: eco["lastTick"] = 0
+    if "balances" not in eco:
+        eco["balances"] = {}  # owner -> int
+    if "lastTick" not in eco:
+        eco["lastTick"] = 0
     return eco
 
 def _save_economy(eco: dict) -> None:
     _write_json(ECO_FILE, eco)
 
+
+# ---------- models ----------
 class BalanceItem(BaseModel):
     owner: str
     balance: int
@@ -48,8 +70,11 @@ class BalanceItem(BaseModel):
 
 class SummaryOut(BaseModel):
     lastTick: int
+    intervalSec: int
     totals: List[BalanceItem]
 
+
+# ---------- endpoints ----------
 @router.get("/summary", response_model=SummaryOut)
 def summary():
     eco = _load_economy()
@@ -60,10 +85,19 @@ def summary():
         if k
     ]
     items.sort(key=lambda x: x.balance, reverse=True)
-    return SummaryOut(lastTick=int(eco["lastTick"]), totals=items)
+    return SummaryOut(
+        lastTick=int(eco["lastTick"]),
+        intervalSec=_interval_sec(),
+        totals=items,
+    )
+
 
 @router.post("/tick", response_model=SummaryOut)
 def tick():
+    """
+    Accrue income per owner:
+    sum(baseIncome[type] * level) across all pins for that owner.
+    """
     pins = _load_pins()
     if not pins:
         raise HTTPException(status_code=400, detail="No pins available")
@@ -76,19 +110,20 @@ def tick():
     per_owner: Dict[str, int] = {}
     for p in pins:
         owner = (p.get("owner") or "").strip()
-        if not owner: 
+        if not owner:
             continue
         tkey = p.get("type") or ""
         base = int(income_map.get(tkey, 0))
         level = int(p.get("level") or 1)
-        if level < 1: level = 1
-        if level > 5: level = 5
+        if level < 1:
+            level = 1
+        if level > 5:
+            level = 5
         inc = base * level
         per_owner[owner] = per_owner.get(owner, 0) + inc
 
+    # nothing to accrue (e.g., pins without owners)
     if not per_owner:
-        # nothing to accrue
-        eco = _load_economy()
         return summary()
 
     eco = _load_economy()
