@@ -1,4 +1,3 @@
-// src/pages/Dashboard.jsx
 import { useEffect, useState } from "react";
 import api from "../lib/api";
 import { useAuth } from "../store/auth";
@@ -14,7 +13,7 @@ function Card({ title, value, hint }) {
     );
 }
 
-/* tiny hooks/utils for timers */
+/* tiny timing hooks/utils */
 function useNow(intervalMs = 1000) {
     const [now, setNow] = useState(Date.now());
     useEffect(() => {
@@ -23,6 +22,7 @@ function useNow(intervalMs = 1000) {
     }, [intervalMs]);
     return now;
 }
+function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
 function mmss(ms) {
     if (ms <= 0) return "00:00";
     const m = Math.floor(ms / 60000);
@@ -30,103 +30,7 @@ function mmss(ms) {
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-/* events panel (backend-wired) */
-function EventsPanel() {
-    const [events, setEvents] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const now = useNow(1000); // tick every second
-
-    async function fetchEvents() {
-        const { data } = await api.get("/events");
-        setEvents(data);
-        setLoading(false);
-    }
-    useEffect(() => {
-        fetchEvents();
-    }, []);
-
-    async function add(type, city, note, cdMins) {
-        const { data } = await api.post("/events", { type, city, note, cdMins });
-        setEvents((prev) => [data, ...prev].slice(0, 200));
-    }
-
-    async function clearAll() {
-        await api.delete("/events");
-        setEvents([]);
-    }
-
-    if (loading) {
-        return (
-            <div className="p-4 rounded-lg border bg-white text-sm text-gray-500">
-                Loading events…
-            </div>
-        );
-    }
-
-    return (
-        <div className="p-4 rounded-lg border bg-white">
-            <div className="mb-3 flex items-center justify-between">
-                <div className="font-medium">Influence Ops — Recent Events</div>
-                <div className="flex items-center gap-2">
-                    <button
-                        className="px-3 py-2 rounded-lg border"
-                        onClick={() =>
-                            add("Power Outage", "Neo London", "Blocked by Generator Upgrade", 45)
-                        }
-                    >
-                        + Power Outage
-                    </button>
-                    <button
-                        className="px-3 py-2 rounded-lg border"
-                        onClick={() =>
-                            add("Media Scandal", "Metro York", "PR Office mitigated 60%", 55)
-                        }
-                    >
-                        + Media Scandal
-                    </button>
-                    <button className="px-3 py-2 rounded-lg border" onClick={clearAll}>
-                        Clear
-                    </button>
-                </div>
-            </div>
-
-            {events.length === 0 && (
-                <div className="text-sm text-gray-500 mb-3">No events yet.</div>
-            )}
-
-            <ul className="divide-y">
-                {events.map((e, i) => {
-                    const created = typeof e.t === "number" ? e.t : Date.now();
-                    const cd = typeof e.cdMins === "number" ? e.cdMins : 0;
-                    const endAt = created + cd * 60 * 1000;
-                    const remain = endAt - now;
-                    const expired = remain <= 0;
-
-                    return (
-                        <li key={i} className="py-2 flex items-start justify-between">
-                            <div>
-                                <div className="font-medium">
-                                    {e.type} — {e.city}
-                                </div>
-                                <div className="text-sm text-gray-500">{e.note}</div>
-                            </div>
-                            <span
-                                className={
-                                    "text-xs " + (expired ? "text-gray-400" : "text-gray-600")
-                                }
-                                title={expired ? "Cooldown complete" : "Cooldown running"}
-                            >
-                                {expired ? "CD 00:00" : `CD ${mmss(remain)}`}
-                            </span>
-                        </li>
-                    );
-                })}
-            </ul>
-        </div>
-    );
-}
-
-/* balances panel */
+/* balances panel (unchanged) */
 function BalancesPanel() {
     const [summary, setSummary] = useState({ lastTick: 0, totals: [] });
     const [loading, setLoading] = useState(true);
@@ -143,35 +47,20 @@ function BalancesPanel() {
         try {
             const { data } = await api.post("/economy/tick");
             setSummary(data);
-        } catch (e) {
-            // no-op
         } finally {
             setBusy(false);
         }
     }
 
-    useEffect(() => {
-        fetchSummary();
-    }, []);
+    useEffect(() => { fetchSummary(); }, []);
 
-    if (loading) {
-        return (
-            <div className="p-4 rounded-lg border bg-white text-sm text-gray-500">
-                Loading economy…
-            </div>
-        );
-    }
+    if (loading) return <div className="p-4 rounded-lg border bg-white text-sm text-gray-500">Loading economy…</div>;
 
     return (
         <div className="p-4 rounded-lg border bg-white">
             <div className="mb-3 flex items-center justify-between">
                 <div className="font-medium">Economy — Top Balances</div>
-                <button
-                    className="px-3 py-2 rounded-lg border"
-                    onClick={runTick}
-                    disabled={busy}
-                    title="Compute one income tick"
-                >
+                <button className="px-3 py-2 rounded-lg border" onClick={runTick} disabled={busy}>
                     {busy ? "Ticking…" : "Run Tick"}
                 </button>
             </div>
@@ -208,6 +97,108 @@ function BalancesPanel() {
     );
 }
 
+/* events panel — polished */
+function EventsPanel() {
+    const [events, setEvents] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const now = useNow(1000);      // drives progress bars
+    const pollNow = useNow(10000); // background refresh every 10s
+
+    function normalize(list) {
+        const arr = Array.isArray(list) ? list : [];
+        // remove fully expired except keep the latest 5 for context
+        const withIdx = arr.map((e, i) => ({ ...e, _i: i }));
+        const active = [];
+        const expired = [];
+        for (const e of withIdx) {
+            const start = typeof e.t === "number" ? e.t : Date.now();
+            const cd = typeof e.cdMins === "number" ? e.cdMins : 0;
+            const endAt = start + cd * 60 * 1000;
+            if (endAt > Date.now()) active.push(e); else expired.push(e);
+        }
+        expired.sort((a, b) => b._i - a._i);
+        const keepExpired = expired.slice(0, 5);
+        const out = [...active, ...keepExpired];
+        // hard cap to 100 newest
+        return out.slice(0, 100);
+    }
+
+    async function fetchEvents() {
+        try {
+            const { data } = await api.get("/events");
+            setEvents(normalize(data));
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    useEffect(() => { fetchEvents(); }, []);
+    useEffect(() => { if (!loading) fetchEvents(); /* poll */ }, [pollNow]); // background refresh
+
+    async function add(type, city, note, cdMins) {
+        const { data } = await api.post("/events", { type, city, note, cdMins });
+        setEvents(prev => normalize([data, ...prev]));
+    }
+
+    async function clearAll() {
+        await api.delete("/events");
+        setEvents([]);
+    }
+
+    if (loading) {
+        return <div className="p-4 rounded-lg border bg-white text-sm text-gray-500">Loading events…</div>;
+    }
+
+    return (
+        <div className="p-4 rounded-lg border bg-white">
+            <div className="mb-3 flex items-center justify-between">
+                <div className="font-medium">Influence Ops — Recent Events</div>
+                <div className="flex items-center gap-2">
+                    <button className="px-3 py-2 rounded-lg border"
+                        onClick={() => add("Power Outage", "Neo London", "Blocked by Generator Upgrade", 45)}>
+                        + Power Outage
+                    </button>
+                    <button className="px-3 py-2 rounded-lg border"
+                        onClick={() => add("Media Scandal", "Metro York", "PR Office mitigated 60%", 55)}>
+                        + Media Scandal
+                    </button>
+                    <button className="px-3 py-2 rounded-lg border" onClick={clearAll}>Clear</button>
+                </div>
+            </div>
+
+            {events.length === 0 && <div className="text-sm text-gray-500 mb-3">No events yet.</div>}
+
+            <ul className="divide-y">
+                {events.map((e, i) => {
+                    const start = typeof e.t === "number" ? e.t : Date.now();
+                    const cd = typeof e.cdMins === "number" ? e.cdMins : 0;
+                    const endAt = start + cd * 60 * 1000;
+                    const remain = endAt - now;
+                    const expired = remain <= 0;
+                    const pct = cd > 0 ? clamp01((now - start) / (cd * 60 * 1000)) : 1;
+
+                    return (
+                        <li key={i} className="py-2">
+                            <div className="flex items-start justify-between">
+                                <div>
+                                    <div className="font-medium">{e.type} — {e.city}</div>
+                                    <div className="text-sm text-gray-500">{e.note}</div>
+                                </div>
+                                <span className={"text-xs " + (expired ? "text-gray-400" : "text-gray-600")}>
+                                    {expired ? "CD 00:00" : `CD ${mmss(remain)}`}
+                                </span>
+                            </div>
+                            <div className="mt-2 h-1.5 rounded bg-gray-100">
+                                <div className="h-1.5 rounded bg-gray-400" style={{ width: `${pct * 100}%` }} />
+                            </div>
+                        </li>
+                    );
+                })}
+            </ul>
+        </div>
+    );
+}
+
 export default function Dashboard() {
     const { token } = useAuth();
     const [stats, setStats] = useState(null);
@@ -226,9 +217,7 @@ export default function Dashboard() {
                 if (!ignore) setLoading(false);
             }
         })();
-        return () => {
-            ignore = true;
-        };
+        return () => { ignore = true; };
     }, [token]);
 
     if (loading) return <div className="animate-pulse text-gray-500">Loading…</div>;
