@@ -4,10 +4,12 @@ from wt_app.core.config import settings
 from wt_app.db.base import async_session, init_db
 from wt_app.api.auth import router as auth_router   # <-- IMPORTANT
 from wt_app.api.admin import router as admin_router
+from wt_app.api.stats import router as stats_router
 
 
 app = FastAPI(title="World Tycoon")
 app.include_router(admin_router)
+app.include_router(stats_router)
 
 
 @app.on_event("startup")
