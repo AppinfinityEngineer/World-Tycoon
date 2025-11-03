@@ -1,7 +1,9 @@
+// src/pages/Map.jsx
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { useEffect, useMemo, useState } from "react";
+import api from "../lib/api";
 
 function squareIcon(color = "#22c55e") {
     return L.divIcon({
@@ -17,47 +19,97 @@ function squareIcon(color = "#22c55e") {
 
 const COLORS = ["#22c55e", "#3b82f6", "#f59e0b", "#ef4444"];
 
-function ClickToAdd({ colorIdx, onAdd }) {
-    useMapEvents({
-        click(e) {
-            const c = COLORS[colorIdx % COLORS.length];
-            onAdd({ lat: e.latlng.lat, lng: e.latlng.lng, color: c });
-        },
-    });
-    return null;
-}
-
 export default function MapPage() {
-    const [pins, setPins] = useState(() => {
-        try { return JSON.parse(localStorage.getItem("wt_pins") || "[]"); }
-        catch { return []; }
-    });
+    const [pins, setPins] = useState([]);
     const [colorIdx, setColorIdx] = useState(0);
+    const [loading, setLoading] = useState(true);
+
+    // ---- server sync ----
+    async function fetchPins() {
+        try {
+            const { data } = await api.get("/pins");
+            setPins(data ?? []);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    async function addPin(lat, lng, color) {
+        try {
+            const { data } = await api.post("/pins", { lat, lng, color });
+            setPins((prev) => [...prev, data]);
+        } catch (e) {
+            console.error("addPin failed", e);
+        }
+    }
+
+    async function clearServerPins() {
+        try {
+            await api.delete("/pins");
+            setPins([]);
+        } catch (e) {
+            console.error("clearPins failed", e);
+        }
+    }
+
+    async function deletePin(id) {
+        try {
+            await api.delete(`/pins/${id}`);
+            setPins((prev) => prev.filter((p) => p.id !== id));
+        } catch (e) {
+            console.error("deletePin failed", e);
+        }
+    }
 
     useEffect(() => {
-        localStorage.setItem("wt_pins", JSON.stringify(pins));
-    }, [pins]);
+        fetchPins();
+    }, []);
 
+    // click-to-add using server
+    function ClickToAdd({ colorIdx }) {
+        useMapEvents({
+            click(e) {
+                const c = COLORS[colorIdx % COLORS.length];
+                addPin(e.latlng.lat, e.latlng.lng, c);
+            },
+        });
+        return null;
+    }
+
+    // ---- dev helpers: save/load JSON ----
     function downloadPins(list) {
-        const blob = new Blob([JSON.stringify(list, null, 2)], { type: "application/json" });
+        const blob = new Blob([JSON.stringify(list, null, 2)], {
+            type: "application/json",
+        });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
-        a.href = url; a.download = "world-tycoon-pins.json"; a.click();
+        a.href = url;
+        a.download = "world-tycoon-pins.json";
+        a.click();
         URL.revokeObjectURL(url);
     }
 
-    function uploadPins(e) {
+    async function uploadPins(e) {
         const file = e.target.files?.[0];
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-            try {
-                const data = JSON.parse(reader.result);
-                if (Array.isArray(data)) setPins(data);
-            } catch { }
-        };
-        reader.readAsText(file);
+        const text = await file.text();
         e.target.value = "";
+        try {
+            const data = JSON.parse(text);
+            if (!Array.isArray(data)) return;
+
+            // Replace server state with uploaded layout
+            await clearServerPins();
+            // bulk add sequentially (simple & safe)
+            for (const p of data) {
+                if (typeof p?.lat === "number" && typeof p?.lng === "number") {
+                    const color = typeof p?.color === "string" ? p.color : COLORS[0];
+                    await addPin(p.lat, p.lng, color);
+                }
+            }
+        } catch (err) {
+            console.error("uploadPins failed", err);
+        }
     }
 
     const centerUK = useMemo(() => [52.8, -2.2], []);
@@ -72,7 +124,7 @@ export default function MapPage() {
                 >
                     Add Pin (color: {["green", "blue", "amber", "red"][colorIdx % 4]})
                 </button>
-                <button className="px-3 py-2 rounded-lg border" onClick={() => setPins([])}>
+                <button className="px-3 py-2 rounded-lg border" onClick={clearServerPins}>
                     Clear Pins
                 </button>
                 <button className="px-3 py-2 rounded-lg border" onClick={() => downloadPins(pins)}>
@@ -94,9 +146,19 @@ export default function MapPage() {
                     attribution="&copy; OpenStreetMap"
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
-                <ClickToAdd colorIdx={colorIdx} onAdd={(p) => setPins((prev) => [...prev, p])} />
-                {pins.map((p, i) => (
-                    <Marker key={i} position={[p.lat, p.lng]} icon={squareIcon(p.color)} />
+
+                {!loading && <ClickToAdd colorIdx={colorIdx} />}
+
+                {pins.map((p) => (
+                    <Marker
+                        key={p.id ?? `${p.lat},${p.lng}`}
+                        position={[p.lat, p.lng]}
+                        icon={squareIcon(p.color)}
+                        eventHandlers={{
+                            // right-click to delete
+                            contextmenu: () => p.id && deletePin(p.id),
+                        }}
+                    />
                 ))}
             </MapContainer>
         </div>
