@@ -7,9 +7,15 @@ from wt_app.db.base import async_session
 from wt_app.db.models import User, Waitlist
 from wt_app.core.security import hash_password, verify_password, create_access_token
 from wt_app.core.config import settings
+from fastapi import Depends
+from wt_app.api.deps import get_current_user
+from wt_app.schemas.user import UserOut
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+@router.get("/me", response_model=UserOut)
+async def me(user = Depends(get_current_user)):
+    return UserOut(id=user.id, email=user.email)
 
 @router.post(
     "/signup",
