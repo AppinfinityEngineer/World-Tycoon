@@ -3,7 +3,7 @@
     "lat": 52.802138732602735,
     "lng": -2.235374450683594,
     "color": "#22c55e",
-    "type": "test",
+    "type": "Data Center",
     "owner": "Richy P",
     "level": 1,
     "id": "48894803d82d453f8baad0869301b5a4",
@@ -13,8 +13,8 @@
     "lat": 52.80711994548586,
     "lng": -2.229881286621094,
     "color": "#f59e0b",
-    "type": null,
-    "owner": null,
+    "type": "PR Office",
+    "owner": "Me",
     "level": 1,
     "id": "6be8486c5a534e1e926a1633849c67b5",
     "createdAt": 1762187566577
@@ -23,10 +23,30 @@
     "lat": 52.81749563964796,
     "lng": -2.2151184082031254,
     "color": "#ef4444",
-    "type": "Data Center",
+    "type": "Solar Farm",
     "owner": "Me",
     "level": 1,
     "id": "b834ea12e0a54785aff10b443d414833",
     "createdAt": 1762201038051
+  },
+  {
+    "lat": 52.79632659633937,
+    "lng": -2.2700500488281254,
+    "color": "#22c55e",
+    "type": "Solar Farm",
+    "owner": "test@test.com",
+    "level": 4,
+    "id": "54f103f5cabb4b50bd51203735272180",
+    "createdAt": 1762201561221
+  },
+  {
+    "lat": 52.80462941037311,
+    "lng": -2.2041320800781254,
+    "color": "#22c55e",
+    "type": "HQ",
+    "owner": "test@test.com",
+    "level": 5,
+    "id": "bc8accf62aec4c9f88859435fe0b43a3",
+    "createdAt": 1762201627880
   }
 ]

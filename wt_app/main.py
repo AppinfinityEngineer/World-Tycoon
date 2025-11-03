@@ -9,6 +9,7 @@ from wt_app.api.stats import router as stats_router
 from wt_app.api.pins import router as pins_router
 from wt_app.api.events import router as events_router
 from wt_app.api.types import router as types_router
+from wt_app.api.economy import router as economy_router
 
 app = FastAPI(title="World Tycoon")
 
@@ -18,6 +19,7 @@ app.include_router(pins_router)
 app.include_router(events_router)
 app.include_router(types_router)
 app.include_router(auth_router)
+app.include_router(economy_router)
 
 @app.on_event("startup")
 async def _startup():

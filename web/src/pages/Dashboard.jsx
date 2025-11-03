@@ -126,6 +126,88 @@ function EventsPanel() {
     );
 }
 
+/* balances panel */
+function BalancesPanel() {
+    const [summary, setSummary] = useState({ lastTick: 0, totals: [] });
+    const [loading, setLoading] = useState(true);
+    const [busy, setBusy] = useState(false);
+
+    async function fetchSummary() {
+        const { data } = await api.get("/economy/summary");
+        setSummary(data);
+        setLoading(false);
+    }
+
+    async function runTick() {
+        setBusy(true);
+        try {
+            const { data } = await api.post("/economy/tick");
+            setSummary(data);
+        } catch (e) {
+            // no-op
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    useEffect(() => {
+        fetchSummary();
+    }, []);
+
+    if (loading) {
+        return (
+            <div className="p-4 rounded-lg border bg-white text-sm text-gray-500">
+                Loading economy…
+            </div>
+        );
+    }
+
+    return (
+        <div className="p-4 rounded-lg border bg-white">
+            <div className="mb-3 flex items-center justify-between">
+                <div className="font-medium">Economy — Top Balances</div>
+                <button
+                    className="px-3 py-2 rounded-lg border"
+                    onClick={runTick}
+                    disabled={busy}
+                    title="Compute one income tick"
+                >
+                    {busy ? "Ticking…" : "Run Tick"}
+                </button>
+            </div>
+
+            {summary.totals.length === 0 ? (
+                <div className="text-sm text-gray-500">
+                    No balances yet. Assign owners/types/levels to pins, then run a tick.
+                </div>
+            ) : (
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <thead>
+                            <tr className="text-left text-gray-500">
+                                <th className="py-2 pr-4">Owner</th>
+                                <th className="py-2 pr-4">Balance</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {summary.totals.map((row) => (
+                                <tr key={row.owner} className="border-t">
+                                    <td className="py-2 pr-4">{row.owner}</td>
+                                    <td className="py-2 pr-4">{row.balance}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+
+            <div className="text-xs text-gray-400 mt-2">
+                Last tick: {summary.lastTick ? new Date(summary.lastTick).toLocaleString() : "—"}
+            </div>
+        </div>
+    );
+}
+
 export default function Dashboard() {
     const { token } = useAuth();
     const [stats, setStats] = useState(null);
@@ -161,6 +243,7 @@ export default function Dashboard() {
                 <Card title="Season Ends In" value="—" hint="Add in Phase 6" />
             </div>
 
+            <BalancesPanel />
             <EventsPanel />
 
             <div className="p-4 rounded-lg border bg-white">
