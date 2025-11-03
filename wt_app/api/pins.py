@@ -1,4 +1,3 @@
-# wt_app/api/pins.py
 from fastapi import APIRouter, HTTPException, Body
 from pydantic import BaseModel, Field
 from typing import List, Optional
@@ -10,6 +9,21 @@ router = APIRouter(prefix="/pins", tags=["pins"])
 DATA_PATH = Path("data")
 DATA_PATH.mkdir(exist_ok=True)
 FILE = DATA_PATH / "pins.json"
+TFILE = DATA_PATH / "building_types.json"
+
+def _valid_types() -> set[str]:
+    try:
+        raw = json.loads(TFILE.read_text(encoding="utf-8"))
+        return {r["key"] for r in raw if isinstance(r, dict) and "key" in r}
+    except Exception:
+        return set()
+
+def _clamp_level(v) -> int:
+    try:
+        i = int(v)
+    except Exception:
+        i = 1
+    return 1 if i < 1 else 5 if i > 5 else i
 
 class PinIn(BaseModel):
     lat: float
@@ -45,7 +59,13 @@ def list_pins():
 @router.post("", response_model=Pin)
 def add_pin(payload: PinIn):
     items = _read()
-    pin = Pin(**payload.model_dump())
+    data = payload.model_dump()
+    data["level"] = _clamp_level(data.get("level", 1))
+    if data.get("type"):
+        valid = _valid_types()
+        if data["type"] not in valid:
+            raise HTTPException(status_code=400, detail="Unknown type")
+    pin = Pin(**data)
     items.append(pin)
     _write(items)
     return pin
@@ -64,27 +84,29 @@ def delete_pin(pin_id: str):
     _write(new_items)
     return
 
-# --- NEW: partial update (type/owner/level/color) ---
 _ALLOWED_FIELDS = {"type", "owner", "level", "color"}
 
 @router.patch("/{pin_id}", response_model=Pin)
 def update_pin(pin_id: str, payload: dict = Body(...)):
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="Invalid payload")
-
-    # filter only allowed fields
     updates = {k: v for k, v in payload.items() if k in _ALLOWED_FIELDS}
     if not updates:
         raise HTTPException(status_code=400, detail="No valid fields to update")
+
+    if "level" in updates:
+        updates["level"] = _clamp_level(updates["level"])
+    if "type" in updates and updates["type"]:
+        valid = _valid_types()
+        if updates["type"] not in valid:
+            raise HTTPException(status_code=400, detail="Unknown type")
 
     items = _read()
     for i, p in enumerate(items):
         if p.id == pin_id:
             data = p.model_dump()
             data.update(updates)
-            # keep immutable fields intact (id, lat, lng, createdAt)
             items[i] = Pin(**data)
             _write(items)
             return items[i]
-
     raise HTTPException(status_code=404, detail="Pin not found")

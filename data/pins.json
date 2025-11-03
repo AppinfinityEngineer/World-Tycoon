@@ -18,5 +18,15 @@
     "level": 1,
     "id": "6be8486c5a534e1e926a1633849c67b5",
     "createdAt": 1762187566577
+  },
+  {
+    "lat": 52.81749563964796,
+    "lng": -2.2151184082031254,
+    "color": "#ef4444",
+    "type": "Data Center",
+    "owner": "Me",
+    "level": 1,
+    "id": "b834ea12e0a54785aff10b443d414833",
+    "createdAt": 1762201038051
   }
 ]
