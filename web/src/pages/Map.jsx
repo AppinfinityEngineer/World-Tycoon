@@ -4,6 +4,7 @@ import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { useEffect, useMemo, useState } from "react";
 import api from "../lib/api";
+import { createPortal } from "react-dom";
 
 function squareIcon(color = "#22c55e") {
     return L.divIcon({
@@ -19,10 +20,36 @@ function squareIcon(color = "#22c55e") {
 
 const COLORS = ["#22c55e", "#3b82f6", "#f59e0b", "#ef4444"];
 
+function Modal({ children, onClose }) {
+    // portal ensures we're above everything (Leaflet panes, headers, etc.)
+    return createPortal(
+        <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center"
+            onClick={(e) => {
+                if (e.target === e.currentTarget) onClose?.();
+            }}
+            onKeyDown={(e) => e.key === "Escape" && onClose?.()}
+            role="dialog"
+            aria-modal="true"
+        >
+            {/* backdrop */}
+            <div className="absolute inset-0 bg-black/40" />
+            {/* dialog */}
+            <div className="relative w-full max-w-md bg-white rounded-xl border shadow-lg p-4 space-y-3">
+                {children}
+            </div>
+        </div>,
+        document.body
+    );
+}
+
 export default function MapPage() {
     const [pins, setPins] = useState([]);
     const [colorIdx, setColorIdx] = useState(0);
     const [loading, setLoading] = useState(true);
+
+    // edit state: { id,type,owner,level,color,lat,lng,createdAt }
+    const [editing, setEditing] = useState(null);
 
     // ---- server sync ----
     async function fetchPins() {
@@ -56,8 +83,26 @@ export default function MapPage() {
         try {
             await api.delete(`/pins/${id}`);
             setPins((prev) => prev.filter((p) => p.id !== id));
+            if (editing?.id === id) setEditing(null);
         } catch (e) {
             console.error("deletePin failed", e);
+        }
+    }
+
+    async function saveEdit() {
+        if (!editing?.id) return;
+        const { id, type, owner, level, color } = editing;
+        try {
+            const { data } = await api.patch(`/pins/${id}`, {
+                type: type ?? "",
+                owner: owner ?? "",
+                level: typeof level === "number" ? level : 1,
+                color: color ?? COLORS[0],
+            });
+            setPins((prev) => prev.map((x) => (x.id === id ? data : x)));
+            setEditing(null);
+        } catch (e) {
+            console.error("saveEdit failed", e);
         }
     }
 
@@ -100,7 +145,6 @@ export default function MapPage() {
 
             // Replace server state with uploaded layout
             await clearServerPins();
-            // bulk add sequentially (simple & safe)
             for (const p of data) {
                 if (typeof p?.lat === "number" && typeof p?.lng === "number") {
                     const color = typeof p?.color === "string" ? p.color : COLORS[0];
@@ -155,12 +199,62 @@ export default function MapPage() {
                         position={[p.lat, p.lng]}
                         icon={squareIcon(p.color)}
                         eventHandlers={{
-                            // right-click to delete
-                            contextmenu: () => p.id && deletePin(p.id),
+                            click: () => setEditing({ ...p }),            // open edit
+                            contextmenu: () => p.id && deletePin(p.id),   // right-click delete
                         }}
                     />
                 ))}
             </MapContainer>
+
+            {/* Edit modal */}
+            {editing && (
+                <Modal onClose={() => setEditing(null)}>
+                    <div className="font-medium">Edit Pin</div>
+
+                    <input
+                        className="w-full border rounded px-3 py-2"
+                        placeholder="Type (e.g., Data Center)"
+                        value={editing.type ?? ""}
+                        onChange={(e) => setEditing((s) => ({ ...s, type: e.target.value }))}
+                    />
+                    <input
+                        className="w-full border rounded px-3 py-2"
+                        placeholder="Owner"
+                        value={editing.owner ?? ""}
+                        onChange={(e) => setEditing((s) => ({ ...s, owner: e.target.value }))}
+                    />
+
+                    <div className="flex gap-2">
+                        <input
+                            type="number"
+                            className="flex-1 border rounded px-3 py-2"
+                            placeholder="Level"
+                            value={Number.isFinite(editing.level) ? editing.level : 1}
+                            onChange={(e) =>
+                                setEditing((s) => ({ ...s, level: Number(e.target.value || 1) }))
+                            }
+                        />
+                        <input
+                            className="flex-1 border rounded px-3 py-2"
+                            placeholder="#hex color"
+                            value={editing.color ?? "#22c55e"}
+                            onChange={(e) => setEditing((s) => ({ ...s, color: e.target.value }))}
+                        />
+                    </div>
+
+                    <div className="flex justify-end gap-2">
+                        <button className="px-3 py-2 border rounded" onClick={() => setEditing(null)}>
+                            Cancel
+                        </button>
+                        <button
+                            className="px-3 py-2 border rounded bg-indigo-600 text-white"
+                            onClick={saveEdit}
+                        >
+                            Save
+                        </button>
+                    </div>
+                </Modal>
+            )}
         </div>
     );
 }
