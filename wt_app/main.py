@@ -15,7 +15,7 @@ from wt_app.api.types import router as types_router
 from wt_app.api.economy import router as economy_router
 from wt_app.core.autotick import start_auto_tick
 from wt_app.api.settings import router as settings_router
-from wt_app.api.offers import router as offers_router
+from wt_app.api import offers
 from wt_app.api import admin_settings
 
 # --- Lifespan handler replaces on_event("startup"/"shutdown") ---
@@ -46,7 +46,7 @@ app.include_router(types_router)
 app.include_router(economy_router)
 app.include_router(auth_router)  # auth last or anywhere—your choice
 app.include_router(settings_router)
-app.include_router(offers_router)
+app.include_router(offers.router)
 app.include_router(admin_settings.router)
 
 # CORS (unchanged)
