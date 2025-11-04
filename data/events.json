@@ -1,18 +1,1 @@
-[
-  {
-    "type": "Media Scandal",
-    "city": "Metro York",
-    "note": "PR Office mitigated 60%",
-    "cdMins": 55,
-    "id": "5276080e01c74296b7e287d7197188bd",
-    "t": 1762246571632
-  },
-  {
-    "type": "Power Outage",
-    "city": "Neo London",
-    "note": "Blocked by Generator Upgrade",
-    "cdMins": 45,
-    "id": "6e38568cfdfa409889e86433276d7e7a",
-    "t": 1762246564033
-  }
-]
+[]
