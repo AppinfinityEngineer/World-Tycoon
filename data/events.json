@@ -1,5 +1,21 @@
 [
   {
+    "type": "Trade Accepted — Global",
+    "city": "",
+    "note": "richp77@gmail.com sold pin f6bda9ced3c64d89949c8ac2215084f1 to test@test.com for 1000",
+    "cdMins": 0,
+    "id": "ad3e3ff4d9c24471bf164f01b16e75b8",
+    "t": 1762275900776
+  },
+  {
+    "type": "Offer Sent — Global",
+    "city": "",
+    "note": "test@test.com offered 1000 for pin f6bda9ced3c64d89949c8ac2215084f1 (to richp77@gmail.com)",
+    "cdMins": 0,
+    "id": "092fd9032d724c918d427c9a43868d93",
+    "t": 1762275882206
+  },
+  {
     "type": "Power Outage",
     "city": "Neo London",
     "note": "Blocked by Generator Upgrade",
