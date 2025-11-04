@@ -6,50 +6,53 @@ import asyncio
 
 from wt_app.core.config import settings
 from wt_app.db.base import init_db, async_session
-from wt_app.api.auth import router as auth_router
-from wt_app.api.admin import router as admin_router
-from wt_app.api.stats import router as stats_router
-from wt_app.api.pins import router as pins_router
-from wt_app.api.events import router as events_router
-from wt_app.api.types import router as types_router
-from wt_app.api.economy import router as economy_router
-from wt_app.core.autotick import start_auto_tick
-from wt_app.api.settings import router as settings_router
-from wt_app.api import offers
-from wt_app.api import admin_settings
 
-# --- Lifespan handler replaces on_event("startup"/"shutdown") ---
+# ⬇️ module imports instead of "from ... import router as ..."
+import wt_app.api.auth as auth_api
+import wt_app.api.admin as admin_api
+import wt_app.api.stats as stats_api
+import wt_app.api.pins as pins_api
+import wt_app.api.events as events_api
+import wt_app.api.types as types_api
+import wt_app.api.economy as economy_api
+import wt_app.api.settings as settings_api
+import wt_app.api.offers as offers_api
+import wt_app.api.admin_settings as admin_settings_api
+
+from wt_app.core.autotick import start_auto_tick
+
+from sqlalchemy import select, func
+from wt_app.db.models import User
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
-
-    # start background auto-tick loop
     task = asyncio.create_task(start_auto_tick(app))
     app.state.auto_tick_task = task
-
     try:
         yield
     finally:
-        # stop loop gracefully on shutdown / reload
         task.cancel()
         with suppress(asyncio.CancelledError):
             await task
 
+
 app = FastAPI(title="World Tycoon", lifespan=lifespan)
 
-# Routers
-app.include_router(admin_router)
-app.include_router(stats_router)
-app.include_router(pins_router)
-app.include_router(events_router)
-app.include_router(types_router)
-app.include_router(economy_router)
-app.include_router(auth_router)  # auth last or anywhere—your choice
-app.include_router(settings_router)
-app.include_router(offers.router)
-app.include_router(admin_settings.router)
+# Routers (reference .router on the modules)
+app.include_router(admin_api.router)
+app.include_router(stats_api.router)
+app.include_router(pins_api.router)
+app.include_router(events_api.router)
+app.include_router(types_api.router)
+app.include_router(economy_api.router)
+app.include_router(auth_api.router)
+app.include_router(settings_api.router)
+app.include_router(offers_api.router)
+app.include_router(admin_settings_api.router)
 
-# CORS (unchanged)
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -63,10 +66,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---- optional debug helpers, keep if you had them ----
-from sqlalchemy import select, func
-from wt_app.db.models import User
-
+# Debug helpers
 @app.get("/_debug/settings")
 async def _dbg_settings():
     return {
