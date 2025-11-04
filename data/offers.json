@@ -88,5 +88,15 @@
     "status": "open",
     "createdAt": 1762247614623,
     "expiresAt": null
+  },
+  {
+    "id": "ed7583cb9d8346628d8d32e6df7b7751",
+    "pinId": "48894803d82d453f8baad0869301b5a4",
+    "fromOwner": "Me",
+    "toOwner": "Richy P",
+    "amount": 44,
+    "status": "open",
+    "createdAt": 1762250033240,
+    "expiresAt": null
   }
 ]
