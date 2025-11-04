@@ -175,8 +175,8 @@ function EventsPanel() {
                     const totalMs = Math.max(0, (e.cdMins ?? 0) * 60 * 1000);
                     const elapsed = Math.max(0, now - createdAt);
                     const remain = Math.max(0, totalMs - elapsed);
-                    const expired = totalMs === 0 || remain <= 0;
                     const pct = totalMs === 0 ? 1 : clamp01(elapsed / totalMs);
+                    const showTimer = totalMs > 0 && remain > 0;
 
                     return (
                         <li
@@ -184,23 +184,28 @@ function EventsPanel() {
                             className="py-2 flex items-start justify-between gap-4"
                         >
                             <div className="min-w-0">
-                                <div className="font-medium">{e.type} — {e.city}</div>
-                                <div className="text-sm text-gray-500">{e.note}</div>
+                                <div className="font-medium">{e.type} — {e.city || "Global"}</div>
+                                {e.note && <div className="text-sm text-gray-500">{e.note}</div>}
 
-                                {/* progress bar */}
-                                <div className="mt-1 w-64 sm:w-96">
-                                    <div className="h-1.5 rounded bg-gray-100 overflow-hidden">
-                                        <div
-                                            className={`h-1.5 ${expired ? "bg-gray-300" : "bg-indigo-600"}`}
-                                            style={{ width: `${Math.round(pct * 100)}%` }}
-                                        />
+                                {/* progress bar (only when countdown is active) */}
+                                {showTimer && (
+                                    <div className="mt-1 w-64 sm:w-96">
+                                        <div className="h-1.5 rounded bg-gray-100 overflow-hidden">
+                                            <div
+                                                className="h-1.5 bg-indigo-600"
+                                                style={{ width: `${Math.round(pct * 100)}%` }}
+                                            />
+                                        </div>
                                     </div>
-                                </div>
+                                )}
                             </div>
 
-                            <span className={"text-xs shrink-0 " + (expired ? "text-gray-400" : "text-gray-600")}>
-                                {expired ? "CD 00:00" : `CD ${mmss(remain)}`}
-                            </span>
+                            {/* countdown (only when active) */}
+                            {showTimer && (
+                                <span className="text-xs shrink-0 text-gray-600">
+                                    {`CD ${mmss(remain)}`}
+                                </span>
+                            )}
                         </li>
                     );
                 })}
@@ -216,6 +221,7 @@ function EventsPanel() {
         </div>
     );
 }
+
 
 /* Balances panel (with 10s polling + interval hint) */
 function BalancesPanel() {
