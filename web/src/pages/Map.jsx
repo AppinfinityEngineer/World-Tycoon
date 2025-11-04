@@ -37,7 +37,7 @@ function useKey(key, handler) {
 }
 
 /* ---------- Drawer ---------- */
-function Drawer({ open, onClose, pin, typeMap, onEdit, onDelete }) {
+function Drawer({ open, onClose, pin, typeMap, onEdit, onDelete, onMakeOffer }) {
     if (!open || !pin) return null;
 
     const t = typeMap[pin.type || ""] || { name: "—", baseIncome: 0, key: pin.type || "" };
@@ -46,9 +46,7 @@ function Drawer({ open, onClose, pin, typeMap, onEdit, onDelete }) {
     const bar = pin.color || "#22c55e";
 
     const showKeyInBrackets =
-        t?.key &&
-        t?.name &&
-        t.key.toLowerCase() !== t.name.toLowerCase();
+        t?.key && t?.name && t.key.toLowerCase() !== t.name.toLowerCase();
 
     return (
         <div className="fixed inset-0 pointer-events-none z-50">
@@ -83,23 +81,34 @@ function Drawer({ open, onClose, pin, typeMap, onEdit, onDelete }) {
                 {/* header row */}
                 <div className="px-3 py-2 flex items-center justify-between">
                     <div className="font-semibold tracking-tight text-sm">Pin Details</div>
-                    <div className="flex items-center gap-1">
+
+                    {/* compact buttons */}
+                    <div className="flex items-center gap-1 shrink-0">
+                        {pin.owner && pin.owner !== "Me" && (
+                            <button
+                                className="h-7 px-2 rounded border text-[11px] leading-none whitespace-nowrap hover:bg-gray-50"
+                                onClick={onMakeOffer}
+                                title="Make Offer"
+                            >
+                                Make Offer{/* or just: Offer */}
+                            </button>
+                        )}
                         <button
-                            className="px-2 py-1 rounded border text-xs hover:bg-gray-50"
+                            className="h-7 px-2 rounded border text-[11px] leading-none whitespace-nowrap hover:bg-gray-50"
                             onClick={onEdit}
                             title="Edit"
                         >
                             Edit
                         </button>
                         <button
-                            className="px-2 py-1 rounded border text-xs hover:bg-gray-50"
+                            className="h-7 px-2 rounded border text-[11px] leading-none whitespace-nowrap hover:bg-gray-50"
                             onClick={onDelete}
                             title="Delete"
                         >
                             Delete
                         </button>
                         <button
-                            className="px-2 py-1 rounded border text-xs hover:bg-gray-50"
+                            className="h-7 px-2 rounded border text-[11px] leading-none whitespace-nowrap hover:bg-gray-50"
                             onClick={onClose}
                             title="Close"
                         >
@@ -107,6 +116,7 @@ function Drawer({ open, onClose, pin, typeMap, onEdit, onDelete }) {
                         </button>
                     </div>
                 </div>
+
 
                 {/* body */}
                 <div className="px-3 pb-3 text-[13px] leading-6">
@@ -174,6 +184,10 @@ export default function MapPage() {
     const [selectedId, setSelectedId] = useState(null);
     const [editing, setEditing] = useState(null); // reuse the simple edit modal
     const [typeMap, setTypeMap] = useState({}); // key -> {name, baseIncome, key}
+
+    // Offers (MVP)
+    const [offerOpen, setOfferOpen] = useState(false);
+    const [offerAmount, setOfferAmount] = useState("");
 
     // esc closes drawer
     useKey("Escape", () => setSelectedId(null));
@@ -243,6 +257,12 @@ export default function MapPage() {
             console.error("types fetch failed", e);
             setTypeMap({});
         }
+    }
+
+    // Offers API
+    async function createOffer({ pinId, fromOwner, toOwner, amount }) {
+        const { data } = await api.post("/offers", { pinId, fromOwner, toOwner, amount });
+        return data;
     }
 
     useEffect(() => {
@@ -369,6 +389,7 @@ export default function MapPage() {
                 onClose={() => setSelectedId(null)}
                 onEdit={() => selectedPin && setEditing({ ...selectedPin })}
                 onDelete={() => selectedPin?.id && deletePin(selectedPin.id)}
+                onMakeOffer={() => setOfferOpen(true)}
             />
 
             {/* Simple Edit Modal (same as previous branch behaviour) */}
@@ -431,6 +452,53 @@ export default function MapPage() {
                                 }}
                             >
                                 Save
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Make Offer Modal (MVP) */}
+            {offerOpen && selectedPin && (
+                <div className="fixed inset-0 bg-black/30 grid place-items-center z-50">
+                    <div className="w-[380px] rounded-xl border bg-white p-4 space-y-3">
+                        <div className="font-medium">Make Offer</div>
+                        <div className="text-sm text-gray-600">
+                            Offer to buy <span className="font-semibold">{selectedPin.owner}</span>’s property.
+                        </div>
+                        <input
+                            type="number"
+                            min={1}
+                            className="w-full border rounded px-3 py-2"
+                            placeholder="Amount"
+                            value={offerAmount}
+                            onChange={(e) => setOfferAmount(e.target.value)}
+                        />
+                        <div className="flex justify-end gap-2">
+                            <button
+                                className="px-3 py-2 border rounded"
+                                onClick={() => { setOfferOpen(false); setOfferAmount(""); }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                className="px-3 py-2 border rounded bg-indigo-600 text-white"
+                                onClick={async () => {
+                                    const amount = Number(offerAmount || 0);
+                                    if (amount <= 0) return;
+                                    try {
+                                        await createOffer({
+                                            pinId: selectedPin.id,
+                                            fromOwner: "Me",                 // placeholder; replace with auth user
+                                            toOwner: selectedPin.owner || "",
+                                            amount
+                                        });
+                                    } catch (e) { console.error(e); }
+                                    setOfferOpen(false);
+                                    setOfferAmount("");
+                                }}
+                            >
+                                Send Offer
                             </button>
                         </div>
                     </div>
