@@ -48,5 +48,25 @@
     "level": 5,
     "id": "bc8accf62aec4c9f88859435fe0b43a3",
     "createdAt": 1762201627880
+  },
+  {
+    "lat": 51.5074,
+    "lng": -0.1278,
+    "color": "#22c55e",
+    "type": "Solar Farm",
+    "owner": "Me",
+    "level": 2,
+    "id": "d07f78182a574cbb864b672e32f9026f",
+    "createdAt": 1762253400976
+  },
+  {
+    "lat": 40.7128,
+    "lng": -74.006,
+    "color": "#3b82f6",
+    "type": "Data Center",
+    "owner": "Me",
+    "level": 1,
+    "id": "9d74aaac7a104525a83386e6c04b7f0d",
+    "createdAt": 1762253400979
   }
 ]
