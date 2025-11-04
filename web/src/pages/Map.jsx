@@ -4,13 +4,14 @@ import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { useEffect, useMemo, useState } from "react";
 import api from "../lib/api";
+import { useAuth } from "../store/auth";
 
 /* ---------- icons ---------- */
 function squareIcon(color = "#22c55e", selected = false) {
     const size = selected ? 20 : 16;
     const radius = selected ? 5 : 4;
     const ring = selected
-        ? "0 0 0 2px rgba(59,130,246,.30)" // thinner halo
+        ? "0 0 0 2px rgba(59,130,246,.30)"
         : "0 1px 2px rgba(0,0,0,.25)";
     return L.divIcon({
         className: "wt-square-icon",
@@ -37,11 +38,10 @@ function useKey(key, handler) {
 }
 
 /* ---------- Drawer ---------- */
-function Drawer({ open, onClose, pin, typeMap, onEdit, onDelete, onMakeOffer }) {
+function Drawer({ open, onClose, pin, typeMap, onEdit, onDelete, onMakeOffer, me }) {
     if (!open || !pin) return null;
 
-    const t =
-        typeMap[pin.type || ""] || { name: "—", baseIncome: 0, key: pin.type || "" };
+    const t = typeMap[pin.type || ""] || { name: "—", baseIncome: 0, key: pin.type || "" };
     const level = Math.min(5, Math.max(1, Number(pin.level || 1)));
     const income = (t.baseIncome || 0) * level;
     const bar = pin.color || "#22c55e";
@@ -84,7 +84,7 @@ function Drawer({ open, onClose, pin, typeMap, onEdit, onDelete, onMakeOffer }) 
                     <div className="font-semibold tracking-tight text-sm">Pin Details</div>
 
                     <div className="flex items-center gap-1 shrink-0">
-                        {pin.owner && pin.owner !== "Me" && (
+                        {pin.owner && pin.owner !== me && (
                             <button
                                 className="h-7 px-2 rounded border text-[11px] leading-none whitespace-nowrap hover:bg-gray-50"
                                 onClick={onMakeOffer}
@@ -176,6 +176,9 @@ function Drawer({ open, onClose, pin, typeMap, onEdit, onDelete, onMakeOffer }) 
 
 /* ---------- Map Page ---------- */
 export default function MapPage() {
+    const { user } = useAuth();
+    const me = user?.email || "Me";
+
     const [pins, setPins] = useState([]);
     const [colorIdx, setColorIdx] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -393,6 +396,7 @@ export default function MapPage() {
                 open={!!selectedPin}
                 pin={selectedPin}
                 typeMap={typeMap}
+                me={me}
                 onClose={() => setSelectedId(null)}
                 onEdit={() => selectedPin && setEditing({ ...selectedPin })}
                 onDelete={() => selectedPin?.id && deletePin(selectedPin.id)}
@@ -407,44 +411,77 @@ export default function MapPage() {
                 <div className="fixed inset-0 bg-black/30 grid place-items-center z-50">
                     <div className="w-[420px] rounded-xl border bg-white p-4 space-y-3">
                         <div className="font-medium">Edit Pin</div>
-                        <input
-                            className="w-full border rounded px-3 py-2"
-                            placeholder="Type (e.g., Data Center)"
+
+                        {/* Type dropdown from server */}
+                        <label className="block text-xs text-gray-500">Type</label>
+                        <select
+                            className="w-full border rounded px-3 py-2 bg-white"
                             value={editing.type || ""}
-                            onChange={(e) => setEditing((s) => ({ ...s, type: e.target.value }))}
-                        />
+                            onChange={(e) =>
+                                setEditing((s) => ({ ...s, type: e.target.value }))
+                            }
+                        >
+                            <option value="">— select type —</option>
+                            {Object.values(typeMap)
+                                .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+                                .map((t) => (
+                                    <option key={t.key} value={t.key}>
+                                        {t.name}
+                                        {t.key &&
+                                            t.key.toLowerCase() !== (t.name || "").toLowerCase()
+                                            ? ` (${t.key})`
+                                            : ""}
+                                    </option>
+                                ))}
+                        </select>
+
+                        {/* Owner */}
+                        <label className="block text-xs text-gray-500">Owner</label>
                         <input
                             className="w-full border rounded px-3 py-2"
                             placeholder="Owner"
                             value={editing.owner || ""}
-                            onChange={(e) => setEditing((s) => ({ ...s, owner: e.target.value }))}
+                            onChange={(e) =>
+                                setEditing((s) => ({ ...s, owner: e.target.value }))
+                            }
                         />
+
+                        {/* Level + Color */}
                         <div className="flex gap-2">
-                            <input
-                                type="number"
-                                className="flex-1 border rounded px-3 py-2"
-                                placeholder="Level"
-                                value={editing.level ?? 1}
-                                min={1}
-                                max={5}
-                                onChange={(e) =>
-                                    setEditing((s) => ({
-                                        ...s,
-                                        level: Number(e.target.value || 1),
-                                    }))
-                                }
-                            />
-                            <input
-                                className="flex-1 border rounded px-3 py-2"
-                                placeholder="#hex color"
-                                value={editing.color || "#22c55e"}
-                                onChange={(e) =>
-                                    setEditing((s) => ({ ...s, color: e.target.value }))
-                                }
-                            />
+                            <div className="flex-1">
+                                <label className="block text-xs text-gray-500">Level (1–5)</label>
+                                <input
+                                    type="number"
+                                    className="w-full border rounded px-3 py-2"
+                                    value={editing.level ?? 1}
+                                    min={1}
+                                    max={5}
+                                    onChange={(e) =>
+                                        setEditing((s) => ({
+                                            ...s,
+                                            level: Math.max(1, Math.min(5, Number(e.target.value || 1))),
+                                        }))
+                                    }
+                                />
+                            </div>
+                            <div className="flex-1">
+                                <label className="block text-xs text-gray-500">Color (#hex)</label>
+                                <input
+                                    className="w-full border rounded px-3 py-2"
+                                    placeholder="#22c55e"
+                                    value={editing.color || "#22c55e"}
+                                    onChange={(e) =>
+                                        setEditing((s) => ({ ...s, color: e.target.value }))
+                                    }
+                                />
+                            </div>
                         </div>
+
                         <div className="flex justify-end gap-2">
-                            <button className="px-3 py-2 border rounded" onClick={() => setEditing(null)}>
+                            <button
+                                className="px-3 py-2 border rounded"
+                                onClick={() => setEditing(null)}
+                            >
                                 Cancel
                             </button>
                             <button
@@ -464,7 +501,7 @@ export default function MapPage() {
             {/* Make Offer Modal (close reliably + top-right toast) */}
             {offerOpen && selectedPin && (
                 <div className="fixed inset-0 z-[120]">
-                    {/* clickable overlay to close */}
+                    {/* overlay */}
                     <div
                         className="absolute inset-0 bg-black/30"
                         onClick={() => {
@@ -511,17 +548,15 @@ export default function MapPage() {
                                         try {
                                             await createOffer({
                                                 pinId: selectedPin.id,
-                                                fromOwner: "Me", // TODO: replace with auth user
+                                                fromOwner: me,                    // <-- use logged-in email
                                                 toOwner: selectedPin.owner || "",
                                                 amount,
                                             });
                                             setOfferSent(true);
-                                            // auto-hide toast
                                             setTimeout(() => setOfferSent(false), 1800);
                                         } catch (e) {
                                             console.error(e);
                                         } finally {
-                                            // always close the modal & reset input
                                             setOfferBusy(false);
                                             setOfferOpen(false);
                                             setOfferAmount("");
@@ -536,7 +571,7 @@ export default function MapPage() {
                 </div>
             )}
 
-            {/* Toast: top-right, high z-index */}
+            {/* Toast */}
             {offerSent && (
                 <div className="fixed top-4 right-4 z-[130] rounded-md border bg-white px-3 py-2 text-sm shadow">
                     Offer sent ✅

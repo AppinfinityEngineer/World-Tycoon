@@ -1,10 +1,13 @@
+// web/src/components/Layout.jsx
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../store/auth";
+import OffersBadge from "./OffersBadge";
 
 function usePageTitle() {
     const { pathname } = useLocation();
     if (pathname === "/") return "Dashboard";
     if (pathname.startsWith("/map")) return "Map";
+    if (pathname.startsWith("/offers")) return "Offers";
     if (pathname.startsWith("/settings")) return "Settings";
     return "Dashboard";
 }
@@ -13,26 +16,33 @@ export default function Layout() {
     const { user, logout } = useAuth();
     const title = usePageTitle();
 
+    const links = [
+        { to: "/", label: "Dashboard", icon: "🏠" },
+        { to: "/map", label: "Map", icon: "🗺️" },
+        { to: "/offers", label: "Offers", icon: "🤝", withBadge: true },
+        { to: "/settings", label: "Settings", icon: "⚙️" },
+    ];
+
     return (
         <div className="min-h-screen flex bg-gray-50 text-gray-900">
             <aside className="w-56 border-r bg-white">
                 <div className="px-4 py-4 font-bold">World Tycoon</div>
                 <nav className="px-2 flex flex-col gap-1">
-                    {[
-                        { to: "/", label: "Dashboard", icon: "🏠" },
-                        { to: "/map", label: "Map", icon: "🗺️" },
-                        { to: "/settings", label: "Settings", icon: "⚙️" },
-                    ].map((x) => (
+                    {links.map((x) => (
                         <NavLink
                             key={x.to}
                             to={x.to}
                             className={({ isActive }) =>
-                                "px-3 py-2 rounded-md flex items-center gap-2 " +
+                                "px-3 py-2 rounded-md flex items-center justify-between gap-2 " +
                                 (isActive ? "bg-indigo-100 text-indigo-700" : "hover:bg-gray-100")
                             }
+                            end={x.to === "/"}
                         >
-                            <span>{x.icon}</span>
-                            {x.label}
+                            <span className="flex items-center gap-2">
+                                <span>{x.icon}</span>
+                                {x.label}
+                            </span>
+                            {x.withBadge ? <OffersBadge /> : null}
                         </NavLink>
                     ))}
                 </nav>

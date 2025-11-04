@@ -44,7 +44,7 @@
     "lng": -2.2041320800781254,
     "color": "#22c55e",
     "type": "HQ",
-    "owner": "test@test.com",
+    "owner": "Me",
     "level": 5,
     "id": "bc8accf62aec4c9f88859435fe0b43a3",
     "createdAt": 1762201627880
@@ -68,5 +68,25 @@
     "level": 1,
     "id": "9d74aaac7a104525a83386e6c04b7f0d",
     "createdAt": 1762253400979
+  },
+  {
+    "lat": 52.84052082996082,
+    "lng": -2.1440505981445317,
+    "color": "#22c55e",
+    "type": "Data Center",
+    "owner": "Me",
+    "level": 3,
+    "id": "c89471310fe44335ae10c7182c1adbb4",
+    "createdAt": 1762256952777
+  },
+  {
+    "lat": 52.812930639322005,
+    "lng": -2.183189392089844,
+    "color": "#3b82f6",
+    "type": "Data Center",
+    "owner": "test@test.com",
+    "level": 1,
+    "id": "56991c9cde054ea48ac204121fb26a76",
+    "createdAt": 1762256986284
   }
 ]
