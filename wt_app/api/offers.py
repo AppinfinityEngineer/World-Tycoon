@@ -120,23 +120,27 @@ def _normalize_store_on_import() -> None:
 
 _normalize_store_on_import()
 
-
+async def _get_user_optional(request: Request) -> Optional[CurrentUser]:
+    try:
+        return await get_current_user(request)
+    except HTTPException:
+        return None
+    
 # ---------- routes ----------
 @router.get("", response_model=List[OfferOut])
-def list_offers(
-    request: Request,
+async def list_offers(
     owner: Optional[str] = Query(None),
     mine: Optional[int] = Query(0),
+    user: Optional[CurrentUser] = Depends(_get_user_optional),
 ):
     items = _read()
 
     if mine:
-        try:
-            user = get_current_user(request)
-            me = (user.email or user.sub or "").strip().lower()
-            items = [o for o in items if o.fromOwner == me or o.toOwner == me]
-        except HTTPException:
-            return []  # avoid 401 → axios logout
+        # only filter by "mine" if we actually have an authenticated user
+        if not user:
+            return []  # no auth → no mine results, and we avoid a 401
+        me = ((user.email or user.sub) or "").strip().lower()
+        items = [o for o in items if o.fromOwner == me or o.toOwner == me]
     elif owner:
         owner_lc = owner.strip().lower()
         items = [o for o in items if o.fromOwner == owner_lc or o.toOwner == owner_lc]
