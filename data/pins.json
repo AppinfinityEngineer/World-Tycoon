@@ -1,92 +1,32 @@
 [
   {
-    "lat": 52.802138732602735,
-    "lng": -2.235374450683594,
+    "lat": 52.810855480679486,
+    "lng": -2.2333145141601567,
     "color": "#22c55e",
     "type": "Data Center",
-    "owner": "Richy P",
+    "owner": "richp77@gmail.com",
     "level": 1,
-    "id": "48894803d82d453f8baad0869301b5a4",
-    "createdAt": 1762186633467
+    "id": "15b0f63877014e34b59c48e0dba92db2",
+    "createdAt": 1762266970230
   },
   {
-    "lat": 52.80711994548586,
-    "lng": -2.229881286621094,
-    "color": "#f59e0b",
-    "type": "PR Office",
-    "owner": "Me",
-    "level": 1,
-    "id": "6be8486c5a534e1e926a1633849c67b5",
-    "createdAt": 1762187566577
-  },
-  {
-    "lat": 52.81749563964796,
-    "lng": -2.2151184082031254,
-    "color": "#ef4444",
-    "type": "Solar Farm",
-    "owner": "Me",
-    "level": 1,
-    "id": "b834ea12e0a54785aff10b443d414833",
-    "createdAt": 1762201038051
-  },
-  {
-    "lat": 52.79632659633937,
-    "lng": -2.2700500488281254,
+    "lat": 52.81521319941483,
+    "lng": -2.199325561523438,
     "color": "#22c55e",
-    "type": "Solar Farm",
-    "owner": "test@test.com",
-    "level": 4,
-    "id": "54f103f5cabb4b50bd51203735272180",
-    "createdAt": 1762201561221
-  },
-  {
-    "lat": 52.80462941037311,
-    "lng": -2.2041320800781254,
-    "color": "#22c55e",
-    "type": "HQ",
-    "owner": "Me",
+    "type": "Data Center",
+    "owner": "richp77@gmail.com",
     "level": 5,
-    "id": "bc8accf62aec4c9f88859435fe0b43a3",
-    "createdAt": 1762201627880
+    "id": "f6bda9ced3c64d89949c8ac2215084f1",
+    "createdAt": 1762267569733
   },
   {
-    "lat": 51.5074,
-    "lng": -0.1278,
-    "color": "#22c55e",
-    "type": "Solar Farm",
-    "owner": "Me",
+    "lat": 52.834713824718214,
+    "lng": -2.255630493164063,
+    "color": "#ef4444",
+    "type": "PR Office",
+    "owner": "richp77@gmail.com",
     "level": 2,
-    "id": "d07f78182a574cbb864b672e32f9026f",
-    "createdAt": 1762253400976
-  },
-  {
-    "lat": 40.7128,
-    "lng": -74.006,
-    "color": "#3b82f6",
-    "type": "Data Center",
-    "owner": "Me",
-    "level": 1,
-    "id": "9d74aaac7a104525a83386e6c04b7f0d",
-    "createdAt": 1762253400979
-  },
-  {
-    "lat": 52.84052082996082,
-    "lng": -2.1440505981445317,
-    "color": "#22c55e",
-    "type": "Data Center",
-    "owner": "Me",
-    "level": 3,
-    "id": "c89471310fe44335ae10c7182c1adbb4",
-    "createdAt": 1762256952777
-  },
-  {
-    "lat": 52.812930639322005,
-    "lng": -2.183189392089844,
-    "color": "#3b82f6",
-    "type": "Data Center",
-    "owner": "test@test.com",
-    "level": 1,
-    "id": "56991c9cde054ea48ac204121fb26a76",
-    "createdAt": 1762256986284
+    "id": "507fb100589a4b0b9c1937c91da3d4fe",
+    "createdAt": 1762267853979
   }
 ]
