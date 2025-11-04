@@ -81,26 +81,14 @@ function SeasonCard() {
     );
 }
 
-/* Events panel (your existing, trimmed) */
+/* Events panel (paged or array) WITH progress bars */
 function EventsPanel() {
-    const [events, setEvents] = useState([]);
+    const [page, setPage] = useState({ total: 0, next_offset: null, items: [] });
     const [loading, setLoading] = useState(true);
+
     function usePulse(ms = 10000) { const n = useNow(ms); return n; }
     const pulse = usePulse(10000);
-
-    async function fetchEvents() {
-        const { data } = await api.get("/events");
-        setEvents(data || []);
-        setLoading(false);
-    }
-    useEffect(() => { fetchEvents(); }, []);
-    useEffect(() => { if (!loading) fetchEvents(); }, [pulse]);
-
-    async function add(type, city, note, cdMins) {
-        const { data } = await api.post("/events", { type, city, note, cdMins });
-        setEvents((prev) => [data, ...prev].slice(0, 200));
-    }
-    async function clearAll() { await api.delete("/events"); setEvents([]); }
+    const now = useNow(1000);
 
     function mmss(ms) {
         if (ms <= 0) return "00:00";
@@ -108,44 +96,123 @@ function EventsPanel() {
         const s = Math.floor((ms % 60000) / 1000);
         return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
     }
-    const now = useNow(1000);
 
-    if (loading) return <div className="p-4 rounded-lg border bg-white text-sm text-gray-500">Loading events…</div>;
+    function normalise(resp) {
+        if (Array.isArray(resp)) return { total: resp.length, next_offset: null, items: resp };
+        const { total = 0, next_offset = null, items = [] } = resp || {};
+        return { total, next_offset, items };
+    }
+
+    async function fetchEvents(offset = 0) {
+        const { data } = await api.get("/events", { params: { offset, limit: 50 } });
+        setPage(normalise(data));
+        setLoading(false);
+    }
+    async function loadMore() {
+        if (page.next_offset == null) return;
+        const { data } = await api.get("/events", { params: { offset: page.next_offset, limit: 50 } });
+        const next = normalise(data);
+        setPage((p) => ({
+            total: next.total,
+            next_offset: next.next_offset,
+            items: [...p.items, ...next.items],
+        }));
+    }
+    async function add(type, city, note, cdMins) {
+        const { data } = await api.post("/events", { type, city, note, cdMins });
+        setPage((p) => ({
+            total: p.total + 1,
+            next_offset: p.next_offset,
+            items: [data, ...p.items].slice(0, 50),
+        }));
+    }
+    async function clearAll() {
+        await api.delete("/events");
+        setPage({ total: 0, next_offset: null, items: [] });
+    }
+
+    useEffect(() => { fetchEvents(0); }, []);
+    useEffect(() => { if (!loading) fetchEvents(0); }, [pulse]);
+
+    if (loading) {
+        return (
+            <div className="p-4 rounded-lg border bg-white text-sm text-gray-500">
+                Loading events…
+            </div>
+        );
+    }
 
     return (
         <div className="p-4 rounded-lg border bg-white">
             <div className="mb-3 flex items-center justify-between">
                 <div className="font-medium">Influence Ops — Recent Events</div>
                 <div className="flex items-center gap-2">
-                    <button className="px-3 py-2 rounded-lg border"
-                        onClick={() => add("Power Outage", "Neo London", "Blocked by Generator Upgrade", 45)}>+ Power Outage</button>
-                    <button className="px-3 py-2 rounded-lg border"
-                        onClick={() => add("Media Scandal", "Metro York", "PR Office mitigated 60%", 55)}>+ Media Scandal</button>
-                    <button className="px-3 py-2 rounded-lg border" onClick={clearAll}>Clear</button>
+                    <button
+                        className="px-3 py-2 rounded-lg border"
+                        onClick={() => add("Power Outage", "Neo London", "Blocked by Generator Upgrade", 45)}
+                    >
+                        + Power Outage
+                    </button>
+                    <button
+                        className="px-3 py-2 rounded-lg border"
+                        onClick={() => add("Media Scandal", "Metro York", "PR Office mitigated 60%", 55)}
+                    >
+                        + Media Scandal
+                    </button>
+                    <button className="px-3 py-2 rounded-lg border" onClick={clearAll}>
+                        Clear
+                    </button>
                 </div>
             </div>
 
-            {events.length === 0 && <div className="text-sm text-gray-500 mb-3">No events yet.</div>}
+            {page.items.length === 0 && (
+                <div className="text-sm text-gray-500 mb-3">No events yet.</div>
+            )}
 
             <ul className="divide-y">
-                {events.map((e, i) => {
-                    const t = e.t ?? Date.now();
-                    const endAt = t + (e.cdMins ?? 0) * 60 * 1000;
-                    const remain = endAt - now;
-                    const expired = remain <= 0;
+                {page.items.map((e) => {
+                    const createdAt = e.t ?? Date.now();
+                    const totalMs = Math.max(0, (e.cdMins ?? 0) * 60 * 1000);
+                    const elapsed = Math.max(0, now - createdAt);
+                    const remain = Math.max(0, totalMs - elapsed);
+                    const expired = totalMs === 0 || remain <= 0;
+                    const pct = totalMs === 0 ? 1 : clamp01(elapsed / totalMs);
+
                     return (
-                        <li key={i} className="py-2 flex items-start justify-between">
-                            <div>
+                        <li
+                            key={e.id ?? `${createdAt}-${e.type}-${e.city}`}
+                            className="py-2 flex items-start justify-between gap-4"
+                        >
+                            <div className="min-w-0">
                                 <div className="font-medium">{e.type} — {e.city}</div>
                                 <div className="text-sm text-gray-500">{e.note}</div>
+
+                                {/* progress bar */}
+                                <div className="mt-1 w-64 sm:w-96">
+                                    <div className="h-1.5 rounded bg-gray-100 overflow-hidden">
+                                        <div
+                                            className={`h-1.5 ${expired ? "bg-gray-300" : "bg-indigo-600"}`}
+                                            style={{ width: `${Math.round(pct * 100)}%` }}
+                                        />
+                                    </div>
+                                </div>
                             </div>
-                            <span className={"text-xs " + (expired ? "text-gray-400" : "text-gray-600")}>
+
+                            <span className={"text-xs shrink-0 " + (expired ? "text-gray-400" : "text-gray-600")}>
                                 {expired ? "CD 00:00" : `CD ${mmss(remain)}`}
                             </span>
                         </li>
                     );
                 })}
             </ul>
+
+            {page.next_offset != null && (
+                <div className="mt-3 flex justify-end">
+                    <button className="px-3 py-2 rounded-lg border" onClick={loadMore}>
+                        Load more
+                    </button>
+                </div>
+            )}
         </div>
     );
 }
@@ -187,7 +254,12 @@ function BalancesPanel() {
             ) : (
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">
-                        <thead><tr className="text-left text-gray-500"><th className="py-2 pr-4">Owner</th><th className="py-2 pr-4">Balance</th></tr></thead>
+                        <thead>
+                            <tr className="text-left text-gray-500">
+                                <th className="py-2 pr-4">Owner</th>
+                                <th className="py-2 pr-4">Balance</th>
+                            </tr>
+                        </thead>
                         <tbody>
                             {summary.totals.map((row) => (
                                 <tr key={row.owner} className="border-t">
