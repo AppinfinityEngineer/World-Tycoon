@@ -1,4 +1,3 @@
-// web/src/pages/Dashboard.jsx
 import { useEffect, useState } from "react";
 import api from "../lib/api";
 import { useAuth } from "../store/auth";
@@ -80,6 +79,84 @@ function SeasonCard() {
         </div>
     );
 }
+
+
+/* NEW: Economy health row (Your Balance + Next Tick) */
+function EconomyHealthRow() {
+    const [health, setHealth] = useState({ lastTickTs: 0, nextTickTs: 0, intervalSec: 0, balances: {} });
+    const [summary, setSummary] = useState({ lastTick: 0, intervalSec: 0, totals: [] });
+    const [me, setMe] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const now = useNow(1000);
+    const pulse5s = useNow(5000);          // light polling for auto-ticks
+    const [nonce, setNonce] = useState(0); // bumps on manual tick
+
+    useEffect(() => {
+        let ignore = false;
+        (async () => {
+            try {
+                const [h, s, actor] = await Promise.all([
+                    api.get("/economy/health").then(r => r.data).catch(() => null),
+                    api.get("/economy/summary").then(r => r.data).catch(() => null),
+                    api.get("/auth/me").then(r => r.data).catch(() => null),
+                ]);
+                if (!ignore) {
+                    setHealth(h || { lastTickTs: 0, nextTickTs: 0, intervalSec: 0, balances: {} });
+                    setSummary(s || { lastTick: 0, intervalSec: 0, totals: [] });
+                    setMe(actor);
+                }
+            } finally {
+                if (!ignore) setLoading(false);
+            }
+        })();
+        return () => { ignore = true; };
+    }, [pulse5s, nonce]);
+
+    useEffect(() => {
+        const onEcoTicked = () => setNonce(n => n + 1);
+        window.addEventListener("eco:ticked", onEcoTicked);
+        return () => window.removeEventListener("eco:ticked", onEcoTicked);
+    }, []);
+
+    if (loading) {
+        return (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Card title="Your Balance" value="—" hint="Loading…" />
+                <Card title="Next Tick" value="—" hint="Loading…" />
+            </div>
+        );
+    }
+
+    const email = (me?.email || "").toLowerCase();
+
+    // Try /economy/health balances map first
+    const byMap = (() => {
+        const map = health?.balances || {};
+        return Number(map[email] ?? map[me?.email] ?? 0);
+    })();
+
+    // Fallback: scan /economy/summary totals list
+    const byTotals = (() => {
+        const row = (summary?.totals || []).find(r => (r.owner || "").toLowerCase() === email);
+        return Number(row?.balance ?? 0);
+    })();
+
+    const myBalance = Number.isFinite(byMap) && byMap > 0 ? byMap : byTotals;
+
+    const lastTickTs = health?.lastTickTs || summary?.lastTick || 0;
+    const intervalSec = health?.intervalSec || summary?.intervalSec || 0;
+    const nextTickTs = health?.nextTickTs || (lastTickTs && intervalSec ? lastTickTs + intervalSec * 1000 : 0);
+    const nextInMs = Math.max(0, nextTickTs - now);
+
+    return (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Card title="Your Balance" value={`£${Number(myBalance).toLocaleString()}`} hint={email || undefined} />
+            <Card title="Next Tick" value={nextTickTs ? fmtDHMS(nextInMs) : "—"} hint={`Interval ${intervalSec || 0}s`} />
+        </div>
+    );
+}
+
+
 
 /* Events panel (paged or array) WITH progress bars */
 function EventsPanel() {
@@ -187,7 +264,6 @@ function EventsPanel() {
                                 <div className="font-medium">{e.type} — {e.city || "Global"}</div>
                                 {e.note && <div className="text-sm text-gray-500">{e.note}</div>}
 
-                                {/* progress bar (only when countdown is active) */}
                                 {showTimer && (
                                     <div className="mt-1 w-64 sm:w-96">
                                         <div className="h-1.5 rounded bg-gray-100 overflow-hidden">
@@ -200,7 +276,6 @@ function EventsPanel() {
                                 )}
                             </div>
 
-                            {/* countdown (only when active) */}
                             {showTimer && (
                                 <span className="text-xs shrink-0 text-gray-600">
                                     {`CD ${mmss(remain)}`}
@@ -222,8 +297,8 @@ function EventsPanel() {
     );
 }
 
-
 /* Balances panel (with 10s polling + interval hint) */
+/* Balances panel (with 10s polling + instant refresh on manual tick) */
 function BalancesPanel() {
     const [summary, setSummary] = useState({ lastTick: 0, intervalSec: 0, totals: [] });
     const [loading, setLoading] = useState(true);
@@ -235,13 +310,19 @@ function BalancesPanel() {
         setSummary(data);
         setLoading(false);
     }
+
     async function runTick() {
         setBusy(true);
         try {
             const { data } = await api.post("/economy/tick");
             setSummary(data);
-        } finally { setBusy(false); }
+            // notify other widgets (e.g., EconomyHealthRow) to refresh immediately
+            window.dispatchEvent(new CustomEvent("eco:ticked"));
+        } finally {
+            setBusy(false);
+        }
     }
+
     useEffect(() => { fetchSummary(); }, []);
     useEffect(() => { if (!loading) fetchSummary(); }, [pulse]);
 
@@ -285,6 +366,7 @@ function BalancesPanel() {
     );
 }
 
+
 export default function Dashboard() {
     const { token } = useAuth();
     const [stats, setStats] = useState(null);
@@ -317,6 +399,9 @@ export default function Dashboard() {
                 <SeasonCard />
                 <Card title="Your Token" value="Active" hint="Auto-refresh on expiry" />
             </div>
+
+            {/* NEW: economy snapshot row */}
+            <EconomyHealthRow />
 
             <BalancesPanel />
             <EventsPanel />

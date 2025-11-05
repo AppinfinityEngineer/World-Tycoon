@@ -1,10 +1,9 @@
-# wt_app/api/economy.py
 from __future__ import annotations
 import os
 import json
 import time
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -25,8 +24,10 @@ def _interval_sec() -> int:
     except Exception:
         return 300
 
+
 def _now_ms() -> int:
     return int(time.time() * 1000)
+
 
 def _read_json(path: Path, default):
     if not path.exists():
@@ -35,6 +36,7 @@ def _read_json(path: Path, default):
         return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return default
+
 
 def _write_json(path: Path, obj) -> None:
     path.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -49,19 +51,50 @@ def _type_income_map() -> Dict[str, int]:
         if isinstance(r, dict) and "key" in r
     }
 
+
 def _load_pins() -> List[dict]:
     raw = _read_json(PINS_FILE, [])
     return [r for r in raw if isinstance(r, dict)]
 
+
+def _normalize_last_tick_ms_in(eco: dict) -> int:
+    """
+    Accept legacy keys and units; return epoch ms.
+    - lastTick (ms)
+    - last_tick_ms (ms)
+    - last_tick (sec or ms)
+    """
+    if "lastTick" in eco:
+        v = int(eco.get("lastTick") or 0)
+        return v
+    if "last_tick_ms" in eco:
+        v = int(eco.get("last_tick_ms") or 0)
+        return v
+    if "last_tick" in eco:
+        v = int(eco.get("last_tick") or 0)
+        return v if v > 10_000_000_000 else v * 1000
+    return 0
+
+
 def _load_economy() -> dict:
     eco = _read_json(ECO_FILE, {})
-    if "balances" not in eco:
+    if "balances" not in eco or not isinstance(eco["balances"], dict):
         eco["balances"] = {}  # owner -> int
-    if "lastTick" not in eco:
-        eco["lastTick"] = 0
+
+    # Normalize tick fields so the rest of the code can rely on eco["lastTick"] in ms
+    last_ms = _normalize_last_tick_ms_in(eco)
+    eco["lastTick"] = int(last_ms)
+    # also write back a legacy mirror to keep old readers happy
+    eco["last_tick_ms"] = int(last_ms)
+
     return eco
 
+
 def _save_economy(eco: dict) -> None:
+    # always persist canonical + legacy fields
+    if "lastTick" not in eco:
+        eco["lastTick"] = 0
+    eco["last_tick_ms"] = int(eco["lastTick"])
     _write_json(ECO_FILE, eco)
 
 
@@ -70,11 +103,13 @@ def get_balance(owner: str) -> int:
     eco = _load_economy()
     return int(eco["balances"].get(owner, 0))
 
+
 def set_balance(owner: str, value: int) -> int:
     eco = _load_economy()
     eco["balances"][owner] = int(value)
     _save_economy(eco)
     return int(eco["balances"][owner])
+
 
 def adjust_balance(owner: str, delta: int) -> int:
     eco = _load_economy()
@@ -83,6 +118,7 @@ def adjust_balance(owner: str, delta: int) -> int:
     eco["balances"][owner] = cur
     _save_economy(eco)
     return cur
+
 
 def transfer(from_owner: str, to_owner: str, amount: int) -> None:
     """Atomic-ish transfer: debit buyer, credit seller, raise on insufficient funds."""
@@ -104,10 +140,12 @@ class BalanceItem(BaseModel):
     balance: int
     updatedAt: int
 
+
 class SummaryOut(BaseModel):
     lastTick: int
     intervalSec: int
     totals: List[BalanceItem]
+
 
 class TransferIn(BaseModel):
     """Optional dev/test endpoint payload."""
@@ -115,13 +153,14 @@ class TransferIn(BaseModel):
     toOwner: str = Field(..., min_length=1)
     amount: int = Field(..., gt=0)
 
+
 class TransferOut(BaseModel):
     ok: bool
     fromBalance: int
     toBalance: int
 
 
-# ---------- endpoints (kept as-is + tiny transfer for testing) ----------
+# ---------- endpoints ----------
 @router.get("/summary", response_model=SummaryOut)
 def summary():
     eco = _load_economy()
@@ -165,15 +204,16 @@ def tick():
         level = min(5, max(1, level))
         per_owner[owner] = per_owner.get(owner, 0) + (base * level)
 
-    # nothing to accrue (e.g., pins without owners)
-    if not per_owner:
-        return summary()
-
     eco = _load_economy()
+
+    # accrual only for owners we found income for; others keep their balances
     for owner, inc in per_owner.items():
         eco["balances"][owner] = int(eco["balances"].get(owner, 0)) + int(inc)
 
+    # record canonical + legacy last tick in ms
     eco["lastTick"] = _now_ms()
+    eco["last_tick_ms"] = int(eco["lastTick"])
+
     _save_economy(eco)
     return summary()
 
