@@ -8,7 +8,7 @@ import Signup from "./pages/Signup";
 import Dashboard from "./pages/Dashboard";
 import MapPage from "./pages/Map";
 import Settings from "./pages/Settings";
-import OffersPage from "./pages/Offers"; // <- already present
+import OffersPage from "./pages/Offers"; // keep
 
 export default function App() {
   return (
@@ -29,11 +29,13 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/map" element={<MapPage />} />
           <Route path="/settings" element={<Settings />} />
-          <Route path="/offers" element={<OffersPage />} /> {/* NEW */}
+          <Route path="/offers" element={<OffersPage />} />
         </Route>
 
         {/* Fallback */}
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*"
+          element={<Navigate to="/" replace />}
+        />
       </Routes>
     </BrowserRouter>
   );

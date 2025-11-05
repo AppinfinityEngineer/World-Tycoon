@@ -2,8 +2,9 @@
   "balances": {
     "Richy P": 816,
     "Me": 2464,
-    "test@test.com": 1386,
-    "richp77@gmail.com": 4006
+    "test@test.com": 2106,
+    "richp77@gmail.com": 4270
   },
-  "lastTick": 1762275716761
+  "lastTick": 1762358762381,
+  "last_tick_ms": 1762358762381
 }
