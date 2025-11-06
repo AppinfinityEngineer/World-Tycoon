@@ -212,7 +212,7 @@ export default function MapPage() {
 
     // Dev-only tools: only true when explicitly set
     const devTools =
-        import.meta.env.VITE_ENABLE_MAP_DEV_TOOLS !== "false";
+        import.meta.env.VITE_ENABLE_MAP_DEV_TOOLS === "true";
 
     const [pins, setPins] = useState([]);
     const [streets, setStreets] = useState([]);

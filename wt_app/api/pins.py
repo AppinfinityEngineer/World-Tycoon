@@ -65,7 +65,7 @@ def _get_street_for_pin(pin: dict) -> Optional[dict]:
     if not sid:
         return None
     for s in _load_streets():
-        if s.get("id") == sid:
+        if str(s.get("id")) == str(sid):
             return s
     return None
 
@@ -79,7 +79,7 @@ class PinIn(BaseModel):
     type: Optional[str] = None          # building type key
     owner: Optional[str] = None         # email
     level: int = 1
-    streetId: Optional[str] = None      # optional future linkage
+    streetId: Optional[str] = None      # optional linkage to a street
     streetName: Optional[str] = None
 
 
@@ -105,7 +105,7 @@ def _read() -> List[Pin]:
         try:
             items.append(Pin(**r))
         except Exception:
-            # tolerate legacy entries
+            # tolerate legacy / partial entries without killing everything
             pass
     return items
 
@@ -187,6 +187,27 @@ def buy_or_upgrade_pin(payload: PinBuyIn):
     owner = (pin.owner or "").strip()
     owner_l = owner.lower() if owner else ""
 
+    # ---- enforce street ownership, if this pin belongs to a street ----
+    street = _get_street_for_pin(pin.model_dump())
+    if street:
+        street_owner = (street.get("owner") or "").strip().lower()
+
+        if street_owner:
+            # Street is owned → only street owner can buy/upgrade any slots on it
+            if street_owner != buyer_l:
+                raise HTTPException(
+                    status_code=403,
+                    detail="street owned by another player",
+                )
+        else:
+            # If you want to FORCE claiming the street before any builds, uncomment:
+            # raise HTTPException(
+            #     status_code=400,
+            #     detail="street must be claimed before buying properties",
+            # )
+            # For now: unowned street behaves like global/unclaimed slots.
+            pass
+
     # building type lookup
     types = _load_types()
     t = next((x for x in types if x.get("key") == payload.buildingType), None)
@@ -194,8 +215,6 @@ def buy_or_upgrade_pin(payload: PinBuyIn):
         raise HTTPException(status_code=400, detail="invalid building type")
 
     base_price = int(t.get("basePrice") or t.get("price") or 100)
-
-    # TODO (next branch): if pin.streetId has an owning street, enforce that here
 
     # --- BUY new slot ---
     if not owner:
