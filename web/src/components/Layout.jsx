@@ -1,75 +1,226 @@
 // web/src/components/Layout.jsx
 import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { useAuth } from "../store/auth";
-import OffersBadge from "./OffersBadge";
+import api from "../lib/api";
 
-function usePageTitle() {
-    const { pathname } = useLocation();
-    if (pathname === "/") return "Dashboard";
-    if (pathname.startsWith("/map")) return "Map";
-    if (pathname.startsWith("/offers")) return "Offers";
-    if (pathname.startsWith("/settings")) return "Settings";
-    return "Dashboard";
+function cls(...xs) {
+    return xs.filter(Boolean).join(" ");
+}
+
+/**
+ * Polls /offers for pending offers for the logged-in user.
+ * Uses v2 API: GET /offers?owner={me}&status=PENDING
+ */
+function OffersNavBadge() {
+    const { user } = useAuth();
+    const me = (user?.email || "").toLowerCase();
+    const [count, setCount] = useState(0);
+
+    useEffect(() => {
+        if (!me) {
+            setCount(0);
+            return;
+        }
+
+        let ignore = false;
+
+        async function load() {
+            try {
+                const { data } = await api.get("/offers", {
+                    params: { owner: me, status: "PENDING" },
+                });
+                if (ignore) return;
+                const list = Array.isArray(data) ? data : [];
+                setCount(list.length);
+            } catch {
+                if (!ignore) setCount(0);
+            }
+        }
+
+        load();
+        const id = setInterval(load, 15000); // light poll
+
+        return () => {
+            ignore = true;
+            clearInterval(id);
+        };
+    }, [me]);
+
+    if (!count) return null;
+
+    // small pill badge
+    return (
+        <span className="ml-1 inline-flex items-center justify-center px-1.5 min-w-[16px] h-4 rounded-full text-[10px] font-semibold bg-rose-500 text-white">
+            {count > 9 ? "9+" : count}
+        </span>
+    );
 }
 
 export default function Layout() {
     const { user, logout } = useAuth();
-    const title = usePageTitle();
-
-    const links = [
-        { to: "/", label: "Dashboard", icon: "🏠" },
-        { to: "/map", label: "Map", icon: "🗺️" },
-        { to: "/offers", label: "Offers", icon: "🤝", withBadge: true },
-        { to: "/settings", label: "Settings", icon: "⚙️" },
-    ];
+    const location = useLocation();
 
     return (
-        <div className="min-h-screen flex bg-gray-50 text-gray-900">
-            <aside className="w-56 border-r bg-white">
-                <div className="px-4 py-4 font-bold">World Tycoon</div>
-                <nav className="px-2 flex flex-col gap-1">
-                    {links.map((x) => (
-                        <NavLink
-                            key={x.to}
-                            to={x.to}
-                            className={({ isActive }) =>
-                                "px-3 py-2 rounded-md flex items-center justify-between gap-2 " +
-                                (isActive ? "bg-indigo-100 text-indigo-700" : "hover:bg-gray-100")
-                            }
-                            end={x.to === "/"}
-                        >
-                            <span className="flex items-center gap-2">
-                                <span>{x.icon}</span>
-                                {x.label}
-                            </span>
-                            {x.withBadge ? <OffersBadge /> : null}
-                        </NavLink>
-                    ))}
-                </nav>
-            </aside>
-
-            <main className="flex-1">
-                <header className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b">
-                    <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-                        <div className="font-medium tracking-wide">{title}</div>
-                        <div className="flex items-center gap-3">
-                            <span className="hidden sm:inline text-xs text-gray-500">
-                                Alpha • feature/dashboard-ui-v2
-                            </span>
-                            <span className="text-sm text-gray-600">{user?.email}</span>
-                            <button
-                                onClick={logout}
-                                className="text-sm px-3 py-1.5 rounded bg-gray-900 text-white"
-                            >
-                                Logout
-                            </button>
+        <div className="min-h-screen bg-slate-50 text-slate-900">
+            {/* Top bar */}
+            <header className="border-b bg-white">
+                <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-xs font-bold">
+                            WT
+                        </div>
+                        <div>
+                            <div className="text-sm font-semibold tracking-tight">
+                                World Tycoon
+                            </div>
+                            <div className="text-[10px] text-slate-500">
+                                Phase 1 • Internal build
+                            </div>
                         </div>
                     </div>
-                </header>
 
-                <div className="max-w-6xl mx-auto p-4">
-                    <Outlet />
+                    <nav className="hidden sm:flex items-center gap-4 text-sm">
+                        <NavLink
+                            to="/"
+                            end
+                            className={({ isActive }) =>
+                                cls(
+                                    "px-2 py-1.5 rounded-md",
+                                    isActive
+                                        ? "text-indigo-600 font-semibold"
+                                        : "text-slate-600 hover:text-slate-900"
+                                )
+                            }
+                        >
+                            Dashboard
+                        </NavLink>
+                        <NavLink
+                            to="/map"
+                            className={({ isActive }) =>
+                                cls(
+                                    "px-2 py-1.5 rounded-md",
+                                    isActive
+                                        ? "text-indigo-600 font-semibold"
+                                        : "text-slate-600 hover:text-slate-900"
+                                )
+                            }
+                        >
+                            Map
+                        </NavLink>
+                        <NavLink
+                            to="/offers"
+                            className={({ isActive }) =>
+                                cls(
+                                    "px-2 py-1.5 rounded-md flex items-center",
+                                    isActive
+                                        ? "text-indigo-600 font-semibold"
+                                        : "text-slate-600 hover:text-slate-900"
+                                )
+                            }
+                        >
+                            Offers
+                            <OffersNavBadge />
+                        </NavLink>
+                        <NavLink
+                            to="/settings"
+                            className={({ isActive }) =>
+                                cls(
+                                    "px-2 py-1.5 rounded-md",
+                                    isActive
+                                        ? "text-indigo-600 font-semibold"
+                                        : "text-slate-600 hover:text-slate-900"
+                                )
+                            }
+                        >
+                            Settings
+                        </NavLink>
+                    </nav>
+
+                    <div className="flex items-center gap-3 text-xs">
+                        {user && (
+                            <div className="hidden sm:flex flex-col text-right">
+                                <span className="font-medium truncate max-w-[160px]">
+                                    {user.email}
+                                </span>
+                                <span className="text-[10px] text-slate-500">
+                                    Signed in
+                                </span>
+                            </div>
+                        )}
+                        <button
+                            onClick={logout}
+                            className="px-2 py-1.5 rounded-md border text-xs text-slate-700 hover:bg-slate-50"
+                        >
+                            Logout
+                        </button>
+                    </div>
                 </div>
+
+                {/* mobile nav */}
+                <div className="sm:hidden border-t bg-white">
+                    <div className="mx-auto max-w-6xl px-2 py-1 flex items-center justify-between text-[11px]">
+                        <NavLink
+                            to="/"
+                            end
+                            className={({ isActive }) =>
+                                cls(
+                                    "px-2 py-1 rounded",
+                                    isActive
+                                        ? "text-indigo-600 font-semibold"
+                                        : "text-slate-600"
+                                )
+                            }
+                        >
+                            Dash
+                        </NavLink>
+                        <NavLink
+                            to="/map"
+                            className={({ isActive }) =>
+                                cls(
+                                    "px-2 py-1 rounded",
+                                    isActive
+                                        ? "text-indigo-600 font-semibold"
+                                        : "text-slate-600"
+                                )
+                            }
+                        >
+                            Map
+                        </NavLink>
+                        <NavLink
+                            to="/offers"
+                            className={({ isActive }) =>
+                                cls(
+                                    "px-2 py-1 rounded flex items-center",
+                                    isActive
+                                        ? "text-indigo-600 font-semibold"
+                                        : "text-slate-600"
+                                )
+                            }
+                        >
+                            Offers
+                            <OffersNavBadge />
+                        </NavLink>
+                        <NavLink
+                            to="/settings"
+                            className={({ isActive }) =>
+                                cls(
+                                    "px-2 py-1 rounded",
+                                    isActive
+                                        ? "text-indigo-600 font-semibold"
+                                        : "text-slate-600"
+                                )
+                            }
+                        >
+                            Settings
+                        </NavLink>
+                    </div>
+                </div>
+            </header>
+
+            {/* Content */}
+            <main className="mx-auto max-w-6xl px-4 py-4">
+                <Outlet key={location.pathname} />
             </main>
         </div>
     );

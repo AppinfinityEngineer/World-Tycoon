@@ -7,7 +7,8 @@
     "owner": "test@test.com",
     "level": 1,
     "id": "15b0f63877014e34b59c48e0dba92db2",
-    "createdAt": 1762266970230
+    "createdAt": 1762266970230,
+    "lastTradeAt": 1762426570344
   },
   {
     "lat": 52.81521319941483,
@@ -24,7 +25,7 @@
     "lng": -2.255630493164063,
     "color": "#ef4444",
     "type": "PR Office",
-    "owner": "richp77@gmail.com",
+    "owner": "test@test.com",
     "level": 5,
     "id": "507fb100589a4b0b9c1937c91da3d4fe",
     "createdAt": 1762267853979
@@ -34,9 +35,10 @@
     "lng": -2.1821594238281254,
     "color": "#22c55e",
     "type": "Data Center",
-    "owner": "test@test.com",
+    "owner": "richp77@gmail.com",
     "level": 5,
     "id": "91e3ecc1e7c6448281597d9afdf531d0",
-    "createdAt": 1762418750470
+    "createdAt": 1762418750470,
+    "lastTradeAt": 1762426341485
   }
 ]

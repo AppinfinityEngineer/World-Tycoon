@@ -7,7 +7,7 @@ import asyncio
 from wt_app.core.config import settings
 from wt_app.db.base import init_db, async_session
 
-# ⬇️ module imports instead of "from ... import router as ..."
+# Routers (module imports)
 import wt_app.api.auth as auth_api
 import wt_app.api.admin as admin_api
 import wt_app.api.stats as stats_api
@@ -16,11 +16,11 @@ import wt_app.api.events as events_api
 import wt_app.api.types as types_api
 import wt_app.api.economy as economy_api
 import wt_app.api.settings as settings_api
-import wt_app.api.offers as offers_api
 import wt_app.api.admin_settings as admin_settings_api
 from wt_app.api import shop
 from wt_app.api.economy_health import router as economy_health_router
 from wt_app.api.pins_market import router as pins_market_router
+from wt_app.api import offers_v2  # <-- v2 offers only
 
 from wt_app.core.autotick import start_auto_tick
 
@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="World Tycoon", lifespan=lifespan)
 
-# Routers (reference .router on the modules)
+# Attach routers
 app.include_router(admin_api.router)
 app.include_router(stats_api.router)
 app.include_router(pins_api.router)
@@ -52,11 +52,13 @@ app.include_router(types_api.router)
 app.include_router(economy_api.router)
 app.include_router(auth_api.router)
 app.include_router(settings_api.router)
-app.include_router(offers_api.router)
 app.include_router(admin_settings_api.router)
 app.include_router(shop.router)
-app.include_router(economy_health_router) 
+app.include_router(economy_health_router)
 app.include_router(pins_market_router)
+
+# ✅ ONLY v2 offers (no legacy router)
+app.include_router(offers_v2.router)
 
 # CORS
 app.add_middleware(

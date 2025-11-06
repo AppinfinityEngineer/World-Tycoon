@@ -78,27 +78,40 @@ def _normalize_last_tick_ms_in(eco: dict) -> int:
 
 def _load_economy() -> dict:
     eco = _read_json(ECO_FILE, {})
+
+    # balances map
     if "balances" not in eco or not isinstance(eco["balances"], dict):
         eco["balances"] = {}  # owner -> int
+
+    # escrow bucket for offers: {offer_id: amount}
+    if "escrow" not in eco or not isinstance(eco["escrow"], dict):
+        eco["escrow"] = {}
 
     # Normalize tick fields so the rest of the code can rely on eco["lastTick"] in ms
     last_ms = _normalize_last_tick_ms_in(eco)
     eco["lastTick"] = int(last_ms)
-    # also write back a legacy mirror to keep old readers happy
+    # keep legacy mirror for old readers/tools
     eco["last_tick_ms"] = int(last_ms)
 
     return eco
 
 
 def _save_economy(eco: dict) -> None:
-    # always persist canonical + legacy fields
+    # always persist canonical + legacy tick fields
     if "lastTick" not in eco:
         eco["lastTick"] = 0
     eco["last_tick_ms"] = int(eco["lastTick"])
+
+    # ensure required shapes before write (defensive)
+    if "balances" not in eco or not isinstance(eco["balances"], dict):
+        eco["balances"] = {}
+    if "escrow" not in eco or not isinstance(eco["escrow"], dict):
+        eco["escrow"] = {}
+
     _write_json(ECO_FILE, eco)
 
 
-# ---------- balance helpers (used by offers.accept) ----------
+# ---------- balance helpers (used by offers / map / etc.) ----------
 def get_balance(owner: str) -> int:
     eco = _load_economy()
     return int(eco["balances"].get(owner, 0))
@@ -132,6 +145,60 @@ def transfer(from_owner: str, to_owner: str, amount: int) -> None:
     eco["balances"][from_owner] = from_bal - amount
     eco["balances"][to_owner] = int(eco["balances"].get(to_owner, 0)) + amount
     _save_economy(eco)
+
+
+# ---------- NEW: escrow helpers for offers v2 ----------
+def escrow_hold(offer_id: str, buyer: str, amount: int) -> None:
+    """
+    Move `amount` from buyer's balance into escrow under this offer_id.
+    Raises ValueError on insufficient funds / invalid amount.
+    """
+    amount = int(amount)
+    if amount <= 0:
+        raise ValueError("invalid escrow amount")
+
+    eco = _load_economy()
+    bal = int(eco["balances"].get(buyer, 0))
+    if bal < amount:
+        raise ValueError("insufficient funds for escrow")
+
+    eco["balances"][buyer] = bal - amount
+    eco["escrow"][offer_id] = int(eco["escrow"].get(offer_id, 0)) + amount
+    _save_economy(eco)
+
+
+def escrow_refund(offer_id: str, buyer: str) -> None:
+    """
+    Refund escrow for offer_id back to buyer (used on reject/cancel/expire).
+    No-op if nothing in escrow.
+    """
+    eco = _load_economy()
+    amt = int(eco["escrow"].get(offer_id, 0))
+    if amt > 0:
+        eco["escrow"].pop(offer_id, None)
+        eco["balances"][buyer] = int(eco["balances"].get(buyer, 0)) + amt
+        _save_economy(eco)
+
+
+def escrow_payout(offer_id: str, seller: str, fee_pct: float = 0.0) -> int:
+    """
+    Payout escrow for offer_id to seller, applying an optional fee percentage.
+    Returns net amount credited to seller. No-op (0) if nothing in escrow.
+    """
+    eco = _load_economy()
+    amt = int(eco["escrow"].get(offer_id, 0))
+    if amt <= 0:
+        return 0
+
+    eco["escrow"].pop(offer_id, None)
+
+    fee_pct = max(0.0, float(fee_pct or 0.0))
+    fee = int(round(amt * fee_pct))
+    net = max(0, amt - fee)
+
+    eco["balances"][seller] = int(eco["balances"].get(seller, 0)) + net
+    _save_economy(eco)
+    return net
 
 
 # ---------- models ----------
