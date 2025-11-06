@@ -1,6 +1,5 @@
-// src/pages/Map.jsx
 import "leaflet/dist/leaflet.css";
-import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Polyline, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { useEffect, useMemo, useState } from "react";
 import api from "../lib/api";
@@ -17,9 +16,9 @@ function squareIcon(color = "#22c55e", selected = false) {
     return L.divIcon({
         className: "wt-square-icon",
         html: `<div style="
-      width:${size}px;height:${size}px;border-radius:${radius}px;background:${color};
-      box-shadow:${ring};border:1px solid rgba(0,0,0,.25);
-    "></div>`,
+          width:${size}px;height:${size}px;border-radius:${radius}px;background:${color};
+          box-shadow:${ring};border:1px solid rgba(0,0,0,.25);
+        "></div>`,
         iconSize: [size, size],
         iconAnchor: [size / 2, size / 2],
     });
@@ -54,24 +53,26 @@ function Drawer({
 
     const t =
         typeMap[pin.type || ""] || {
-            name: "Empty plot",
+            name: pin.type ? pin.type : "Empty plot",
             baseIncome: 0,
             key: pin.type || "",
         };
+
     const level = Math.min(5, Math.max(1, Number(pin.level || 1)));
-    const income = (t.baseIncome || 0) * level;
+    const income = (t.baseIncome || 0) * (pin.type ? level : 0);
     const bar = pin.color || "#22c55e";
 
     const showKeyInBrackets =
         t?.key && t?.name && t.key.toLowerCase() !== t.name.toLowerCase();
 
-    const isMine =
-        (pin.owner || "").toLowerCase() === (me || "").toLowerCase();
+    const isMine = (pin.owner || "").toLowerCase() === (me || "").toLowerCase();
     const canMakeOffer = pin.owner && !isMine;
+
+    const streetName = pin.streetName || null;
 
     return (
         <div className="fixed inset-0 pointer-events-none z-50">
-            {/* light overlay */}
+            {/* overlay */}
             <div
                 className="absolute inset-0 bg-black/5"
                 onClick={onClose}
@@ -79,17 +80,16 @@ function Drawer({
                 style={{ pointerEvents: "auto" }}
             />
 
-            {/* compact card */}
             <aside
                 className="
-          absolute right-4 top-20 w-[280px]
-          rounded-xl border bg-white shadow-xl
-          overflow-hidden pointer-events-auto
-          animate-[wtSlideIn_.18s_ease-out]
-        "
+                    absolute right-4 top-20 w-[280px]
+                    rounded-xl border bg-white shadow-xl
+                    overflow-hidden pointer-events-auto
+                    animate-[wtSlideIn_.18s_ease-out]
+                "
                 style={{ zIndex: 60 }}
             >
-                {/* coloured header */}
+                {/* header bar */}
                 <div
                     className="w-full h-10 flex items-center justify-center"
                     style={{ background: bar, color: "#fff" }}
@@ -99,33 +99,28 @@ function Drawer({
                     </div>
                 </div>
 
-                {/* header row */}
+                {/* top row buttons */}
                 <div className="px-3 py-2 flex items-center justify-between">
                     <div className="font-semibold tracking-tight text-sm">
                         Property Details
                     </div>
-
                     <div className="flex items-center gap-1 shrink-0">
-                        {/* Make Offer: only when someone else owns it */}
                         {canMakeOffer && (
                             <button
                                 className="h-7 px-2 rounded border text-[11px] leading-none whitespace-nowrap hover:bg-gray-50"
                                 onClick={onMakeOffer}
-                                title="Make Offer"
                             >
                                 Make Offer
                             </button>
                         )}
 
-                        {/* Buy / Upgrade controls (buildings) */}
+                        {/* Buy / Upgrade (component enforces rules: only buyer / owner etc) */}
                         <PinBuyUpgradeButtons pin={pin} onChanged={onChanged} />
 
-                        {/* Delete: only if allowed (dev tools / owner) */}
                         {allowDelete && (
                             <button
                                 className="h-7 px-2 rounded border text-[11px] leading-none whitespace-nowrap hover:bg-gray-50"
                                 onClick={onDelete}
-                                title="Delete property slot"
                             >
                                 Delete
                             </button>
@@ -134,7 +129,6 @@ function Drawer({
                         <button
                             className="h-7 px-2 rounded border text-[11px] leading-none whitespace-nowrap hover:bg-gray-50"
                             onClick={onClose}
-                            title="Close"
                         >
                             Close
                         </button>
@@ -151,10 +145,17 @@ function Drawer({
                     </div>
 
                     <div className="flex justify-between">
+                        <span className="text-gray-500">Street</span>
+                        <span className="font-medium">
+                            {streetName || "—"}
+                        </span>
+                    </div>
+
+                    <div className="flex justify-between">
                         <span className="text-gray-500">Building</span>
                         <span className="font-medium">
-                            {t.name || "None"}
-                            {showKeyInBrackets && (
+                            {pin.type ? t.name || t.key : "None"}
+                            {pin.type && showKeyInBrackets && (
                                 <span className="text-gray-400"> ({t.key})</span>
                             )}
                         </span>
@@ -195,11 +196,11 @@ function Drawer({
             </aside>
 
             <style>{`
-        @keyframes wtSlideIn {
-          0% { transform: translateX(12px); opacity: .0; }
-          100% { transform: translateX(0); opacity: 1; }
-        }
-      `}</style>
+                @keyframes wtSlideIn {
+                    0% { transform: translateX(12px); opacity: .0; }
+                    100% { transform: translateX(0); opacity: 1; }
+                }
+            `}</style>
         </div>
     );
 }
@@ -209,24 +210,27 @@ export default function MapPage() {
     const { user } = useAuth();
     const me = (user?.email || "me").toLowerCase();
 
-    // Dev-only layout tools
+    // Dev-only tools: only true when explicitly set
     const devTools =
-        import.meta.env.VITE_ENABLE_MAP_DEV_TOOLS === "true";
+        import.meta.env.VITE_ENABLE_MAP_DEV_TOOLS !== "false";
 
     const [pins, setPins] = useState([]);
+    const [streets, setStreets] = useState([]);
     const [colorIdx, setColorIdx] = useState(0);
     const [loading, setLoading] = useState(true);
     const [selectedId, setSelectedId] = useState(null);
+    const [selectedStreetId, setSelectedStreetId] = useState(null);
+    const [typeMap, setTypeMap] = useState({});
 
-    // Offers
     const [offerOpen, setOfferOpen] = useState(false);
     const [offerAmount, setOfferAmount] = useState("");
     const [offerBusy, setOfferBusy] = useState(false);
     const [offerSent, setOfferSent] = useState(false);
 
-    const [typeMap, setTypeMap] = useState({});
-
-    useKey("Escape", () => setSelectedId(null));
+    useKey("Escape", () => {
+        setSelectedId(null);
+        setSelectedStreetId(null);
+    });
 
     /* ---- server sync ---- */
     async function fetchPins() {
@@ -235,6 +239,15 @@ export default function MapPage() {
             setPins(data ?? []);
         } finally {
             setLoading(false);
+        }
+    }
+
+    async function fetchStreets() {
+        try {
+            const { data } = await api.get("/streets");
+            setStreets(data ?? []);
+        } catch (e) {
+            console.error("fetchStreets failed", e);
         }
     }
 
@@ -276,6 +289,7 @@ export default function MapPage() {
                     key: t.key,
                     name: t.name || t.key,
                     baseIncome: Number(t.baseIncome || 0),
+                    basePrice: Number(t.basePrice || t.price || 100),
                 };
             });
             setTypeMap(map);
@@ -285,7 +299,6 @@ export default function MapPage() {
         }
     }
 
-    // Offers API
     async function createOffer({ pinId, fromOwner, toOwner, amount }) {
         const { data } = await api.post("/offers", {
             pinId,
@@ -296,15 +309,29 @@ export default function MapPage() {
         return data;
     }
 
+    async function claimStreet(streetId) {
+        try {
+            await api.post("/streets/claim", {
+                streetId,
+                buyer: me,
+            });
+            await Promise.all([fetchStreets(), fetchPins()]);
+        } catch (e) {
+            console.error("claimStreet failed", e);
+        }
+    }
+
     useEffect(() => {
         fetchPins();
         fetchTypes();
+        fetchStreets();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     function ClickToAdd({ colorIdx }) {
         useMapEvents({
             click(e) {
-                if (!devTools) return; // only layout tooling in dev
+                if (!devTools) return; // only for layout/dev
                 const c = COLORS[colorIdx % COLORS.length];
                 addPin(e.latlng.lat, e.latlng.lng, c);
             },
@@ -335,10 +362,7 @@ export default function MapPage() {
 
             await clearServerPins();
             for (const p of data) {
-                if (
-                    typeof p?.lat === "number" &&
-                    typeof p?.lng === "number"
-                ) {
+                if (typeof p?.lat === "number" && typeof p?.lng === "number") {
                     const color =
                         typeof p?.color === "string" ? p.color : COLORS[0];
                     await addPin(p.lat, p.lng, color);
@@ -354,10 +378,14 @@ export default function MapPage() {
         () => pins.find((p) => p.id === selectedId) || null,
         [pins, selectedId]
     );
+    const selectedStreet = useMemo(
+        () => streets.find((s) => s.id === selectedStreetId) || null,
+        [streets, selectedStreetId]
+    );
 
     return (
         <div className="p-4">
-            {/* Dev / internal build tools */}
+            {/* Dev-only tools */}
             {devTools && (
                 <div className="mb-4 flex items-center gap-2">
                     <button
@@ -403,8 +431,52 @@ export default function MapPage() {
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
 
+                {/* Dev-only click to add loose slots */}
                 {!loading && <ClickToAdd colorIdx={colorIdx} />}
 
+                {/* Streets as polylines */}
+                {streets.map((s) => {
+                    const coords = (s.coords || [])
+                        .filter(
+                            (c) =>
+                                Array.isArray(c) &&
+                                c.length >= 2 &&
+                                typeof c[0] === "number" &&
+                                typeof c[1] === "number"
+                        )
+                        .map((c) => [c[0], c[1]]);
+
+                    if (coords.length < 2) return null;
+
+                    const isSel = s.id === selectedStreetId;
+                    const isMine =
+                        (s.owner || "").toLowerCase() === me;
+                    const color = !s.owner
+                        ? "#9ca3af"
+                        : isMine
+                            ? "#22c55e"
+                            : "#3b82f6";
+
+                    return (
+                        <Polyline
+                            key={s.id}
+                            positions={coords}
+                            pathOptions={{
+                                color,
+                                weight: isSel ? 6 : 4,
+                                dashArray: s.owner ? undefined : "4 6",
+                            }}
+                            eventHandlers={{
+                                click: () => {
+                                    setSelectedStreetId(s.id);
+                                    setSelectedId(null);
+                                },
+                            }}
+                        />
+                    );
+                })}
+
+                {/* Property pins */}
                 {pins.map((p) => {
                     const isSel = p.id === selectedId;
                     const isOwner =
@@ -416,11 +488,14 @@ export default function MapPage() {
                             position={[p.lat, p.lng]}
                             icon={squareIcon(p.color, isSel)}
                             eventHandlers={{
-                                click: () => setSelectedId(p.id || null),
+                                click: () => {
+                                    setSelectedId(p.id || null);
+                                    setSelectedStreetId(null);
+                                },
                                 contextmenu: () => {
-                                    // Right-click delete: only dev tools or owner
+                                    // Right-click delete: dev tools or owner of that slot
                                     if (!p.id) return;
-                                    if (devTools) {
+                                    if (devTools || isOwner) {
                                         deletePin(p.id);
                                     }
                                 },
@@ -448,13 +523,65 @@ export default function MapPage() {
                     setOfferAmount("");
                     setOfferOpen(true);
                 }}
-                onChanged={fetchPins}
+                onChanged={async () => {
+                    await fetchPins(); // refresh after buy/upgrade
+                }}
                 allowDelete={
                     !!selectedPin &&
                     (devTools ||
                         (selectedPin.owner || "").toLowerCase() === me)
                 }
             />
+
+            {/* Street drawer */}
+            {selectedStreet && (
+                <div className="fixed inset-0 pointer-events-none z-40">
+                    <div
+                        className="absolute inset-0"
+                        style={{ pointerEvents: "auto", background: "transparent" }}
+                        onClick={() => setSelectedStreetId(null)}
+                    />
+                    <aside
+                        className="
+                            absolute left-4 top-20 w-[260px]
+                            rounded-xl border bg-white shadow-xl
+                            pointer-events-auto p-3 space-y-2
+                        "
+                    >
+                        <div className="font-semibold text-sm">
+                            {selectedStreet.name}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                            Owner:{" "}
+                            <span className="font-medium">
+                                {selectedStreet.owner || "Unowned"}
+                            </span>
+                        </div>
+                        <div className="text-xs text-gray-500">
+                            Price: £{selectedStreet.price}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                            Slots on claim: {selectedStreet.slots}
+                        </div>
+                        <div className="flex gap-2 justify-end pt-1">
+                            <button
+                                className="px-2 py-1 text-xs border rounded"
+                                onClick={() => setSelectedStreetId(null)}
+                            >
+                                Close
+                            </button>
+                            {!selectedStreet.owner && (
+                                <button
+                                    className="px-2 py-1 text-xs rounded bg-indigo-600 text-white"
+                                    onClick={() => claimStreet(selectedStreet.id)}
+                                >
+                                    Buy Street
+                                </button>
+                            )}
+                        </div>
+                    </aside>
+                </div>
+            )}
 
             {/* Make Offer Modal */}
             {offerOpen && selectedPin && (
@@ -507,7 +634,9 @@ export default function MapPage() {
                                             : "")
                                     }
                                     onClick={async () => {
-                                        const amount = Number(offerAmount || 0);
+                                        const amount = Number(
+                                            offerAmount || 0
+                                        );
                                         if (amount <= 0 || offerBusy) return;
                                         setOfferBusy(true);
                                         try {

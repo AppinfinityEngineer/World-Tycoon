@@ -17,10 +17,11 @@ import wt_app.api.types as types_api
 import wt_app.api.economy as economy_api
 import wt_app.api.settings as settings_api
 import wt_app.api.admin_settings as admin_settings_api
+import wt_app.api.streets as streets_api          # ✅ streets
 from wt_app.api import shop
 from wt_app.api.economy_health import router as economy_health_router
 from wt_app.api.pins_market import router as pins_market_router
-from wt_app.api import offers_v2  # <-- v2 offers only
+from wt_app.api import offers_v2                  # ✅ v2 offers only
 
 from wt_app.core.autotick import start_auto_tick
 
@@ -56,9 +57,8 @@ app.include_router(admin_settings_api.router)
 app.include_router(shop.router)
 app.include_router(economy_health_router)
 app.include_router(pins_market_router)
-
-# ✅ ONLY v2 offers (no legacy router)
-app.include_router(offers_v2.router)
+app.include_router(streets_api.router)   # ✅ streets
+app.include_router(offers_v2.router)     # ✅ only v2 offers
 
 # CORS
 app.add_middleware(
