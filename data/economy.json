@@ -2,11 +2,11 @@
   "balances": {
     "Richy P": 816,
     "Me": 2464,
-    "test@test.com": 4905,
-    "richp77@gmail.com": 1816
+    "test@test.com": 4513,
+    "richp77@gmail.com": 2536
   },
-  "lastTick": 1762428181330,
-  "last_tick_ms": 1762428181330,
+  "lastTick": 1762439469372,
+  "last_tick_ms": 1762439469372,
   "escrow": {
     "60b8e2649b7e489ba8d24de83b30257b": 400
   }
