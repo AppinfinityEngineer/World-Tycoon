@@ -38,17 +38,36 @@ function useKey(key, handler) {
     }, [key, handler]);
 }
 
-/* ---------- Drawer ---------- */
-function Drawer({ open, onClose, pin, typeMap, onChanged, onDelete, onMakeOffer, me }) {
+/* ---------- Drawer (Property panel) ---------- */
+function Drawer({
+    open,
+    onClose,
+    pin,
+    typeMap,
+    onChanged,
+    onDelete,
+    onMakeOffer,
+    me,
+    allowDelete,
+}) {
     if (!open || !pin) return null;
 
-    const t = typeMap[pin.type || ""] || { name: "—", baseIncome: 0, key: pin.type || "" };
+    const t =
+        typeMap[pin.type || ""] || {
+            name: "Empty plot",
+            baseIncome: 0,
+            key: pin.type || "",
+        };
     const level = Math.min(5, Math.max(1, Number(pin.level || 1)));
     const income = (t.baseIncome || 0) * level;
     const bar = pin.color || "#22c55e";
 
     const showKeyInBrackets =
         t?.key && t?.name && t.key.toLowerCase() !== t.name.toLowerCase();
+
+    const isMine =
+        (pin.owner || "").toLowerCase() === (me || "").toLowerCase();
+    const canMakeOffer = pin.owner && !isMine;
 
     return (
         <div className="fixed inset-0 pointer-events-none z-50">
@@ -76,17 +95,19 @@ function Drawer({ open, onClose, pin, typeMap, onChanged, onDelete, onMakeOffer,
                     style={{ background: bar, color: "#fff" }}
                 >
                     <div className="px-3 text-sm font-semibold tracking-wide drop-shadow-[0_1px_1px_rgba(0,0,0,.35)]">
-                        {t.name || "—"}
+                        {t.name || "Property"}
                     </div>
                 </div>
 
                 {/* header row */}
                 <div className="px-3 py-2 flex items-center justify-between">
-                    <div className="font-semibold tracking-tight text-sm">Pin Details</div>
+                    <div className="font-semibold tracking-tight text-sm">
+                        Property Details
+                    </div>
 
                     <div className="flex items-center gap-1 shrink-0">
                         {/* Make Offer: only when someone else owns it */}
-                        {pin.owner && pin.owner.toLowerCase() !== me && (
+                        {canMakeOffer && (
                             <button
                                 className="h-7 px-2 rounded border text-[11px] leading-none whitespace-nowrap hover:bg-gray-50"
                                 onClick={onMakeOffer}
@@ -96,17 +117,19 @@ function Drawer({ open, onClose, pin, typeMap, onChanged, onDelete, onMakeOffer,
                             </button>
                         )}
 
-                        {/* Buy / Upgrade controls */}
-                        <PinBuyUpgradeButtons pin={pin} typeMap={typeMap} onChanged={onChanged} />
+                        {/* Buy / Upgrade controls (buildings) */}
+                        <PinBuyUpgradeButtons pin={pin} onChanged={onChanged} />
 
-                        {/* (Optional) keep Delete if you still want admin/dev delete */}
-                        <button
-                            className="h-7 px-2 rounded border text-[11px] leading-none whitespace-nowrap hover:bg-gray-50"
-                            onClick={onDelete}
-                            title="Delete"
-                        >
-                            Delete
-                        </button>
+                        {/* Delete: only if allowed (dev tools / owner) */}
+                        {allowDelete && (
+                            <button
+                                className="h-7 px-2 rounded border text-[11px] leading-none whitespace-nowrap hover:bg-gray-50"
+                                onClick={onDelete}
+                                title="Delete property slot"
+                            >
+                                Delete
+                            </button>
+                        )}
 
                         <button
                             className="h-7 px-2 rounded border text-[11px] leading-none whitespace-nowrap hover:bg-gray-50"
@@ -122,13 +145,15 @@ function Drawer({ open, onClose, pin, typeMap, onChanged, onDelete, onMakeOffer,
                 <div className="px-3 pb-3 text-[13px] leading-6">
                     <div className="flex justify-between">
                         <span className="text-gray-500">Owner</span>
-                        <span className="font-medium">{pin.owner || "—"}</span>
+                        <span className="font-medium">
+                            {pin.owner || "Unowned"}
+                        </span>
                     </div>
 
                     <div className="flex justify-between">
-                        <span className="text-gray-500">Type</span>
+                        <span className="text-gray-500">Building</span>
                         <span className="font-medium">
-                            {t.name || pin.type || "—"}
+                            {t.name || "None"}
                             {showKeyInBrackets && (
                                 <span className="text-gray-400"> ({t.key})</span>
                             )}
@@ -137,16 +162,20 @@ function Drawer({ open, onClose, pin, typeMap, onChanged, onDelete, onMakeOffer,
 
                     <div className="flex justify-between">
                         <span className="text-gray-500">Level</span>
-                        <span className="font-medium">{level}</span>
+                        <span className="font-medium">
+                            {pin.type ? level : "—"}
+                        </span>
                     </div>
 
                     <div className="flex justify-between">
                         <span className="text-gray-500">Income</span>
-                        <span className="font-medium">+{income} / tick</span>
+                        <span className="font-medium">
+                            {pin.type ? `+${income} / tick` : "—"}
+                        </span>
                     </div>
 
                     <div className="mt-1 flex items-center justify-between">
-                        <span className="text-gray-500">Color</span>
+                        <span className="text-gray-500">Marker</span>
                         <span
                             className="inline-block align-middle rounded border"
                             style={{
@@ -159,8 +188,8 @@ function Drawer({ open, onClose, pin, typeMap, onChanged, onDelete, onMakeOffer,
                     </div>
 
                     <div className="mt-2 text-[11px] text-gray-400">
-                        id: {pin.id?.slice(0, 8) ?? "—"} · lat: {pin.lat?.toFixed(5)} · lng:{" "}
-                        {pin.lng?.toFixed(5)}
+                        id: {pin.id?.slice(0, 8) ?? "—"} · lat:{" "}
+                        {pin.lat?.toFixed(5)} · lng: {pin.lng?.toFixed(5)}
                     </div>
                 </div>
             </aside>
@@ -180,20 +209,23 @@ export default function MapPage() {
     const { user } = useAuth();
     const me = (user?.email || "me").toLowerCase();
 
+    // Dev-only layout tools
+    const devTools =
+        import.meta.env.VITE_ENABLE_MAP_DEV_TOOLS === "true";
 
     const [pins, setPins] = useState([]);
     const [colorIdx, setColorIdx] = useState(0);
     const [loading, setLoading] = useState(true);
     const [selectedId, setSelectedId] = useState(null);
-    const [typeMap, setTypeMap] = useState({}); // key -> {key, name, baseIncome}
 
-    // Offers (MVP)
+    // Offers
     const [offerOpen, setOfferOpen] = useState(false);
     const [offerAmount, setOfferAmount] = useState("");
     const [offerBusy, setOfferBusy] = useState(false);
     const [offerSent, setOfferSent] = useState(false);
 
-    // esc closes drawer
+    const [typeMap, setTypeMap] = useState({});
+
     useKey("Escape", () => setSelectedId(null));
 
     /* ---- server sync ---- */
@@ -272,6 +304,7 @@ export default function MapPage() {
     function ClickToAdd({ colorIdx }) {
         useMapEvents({
             click(e) {
+                if (!devTools) return; // only layout tooling in dev
                 const c = COLORS[colorIdx % COLORS.length];
                 addPin(e.latlng.lat, e.latlng.lng, c);
             },
@@ -286,7 +319,7 @@ export default function MapPage() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = "world-tycoon-pins.json";
+        a.download = "world-tycoon-properties.json";
         a.click();
         URL.revokeObjectURL(url);
     }
@@ -302,8 +335,12 @@ export default function MapPage() {
 
             await clearServerPins();
             for (const p of data) {
-                if (typeof p?.lat === "number" && typeof p?.lng === "number") {
-                    const color = typeof p?.color === "string" ? p.color : COLORS[0];
+                if (
+                    typeof p?.lat === "number" &&
+                    typeof p?.lng === "number"
+                ) {
+                    const color =
+                        typeof p?.color === "string" ? p.color : COLORS[0];
                     await addPin(p.lat, p.lng, color);
                 }
             }
@@ -320,33 +357,40 @@ export default function MapPage() {
 
     return (
         <div className="p-4">
-            <div className="mb-4 flex items-center gap-2">
-                <button
-                    className="px-3 py-2 rounded-lg border"
-                    onClick={() => setColorIdx((i) => i + 1)}
-                    title="Cycle pin color for next click"
-                >
-                    Add Pin (color: {["green", "blue", "amber", "red"][colorIdx % 4]})
-                </button>
-                <button className="px-3 py-2 rounded-lg border" onClick={clearServerPins}>
-                    Clear Pins
-                </button>
-                <button
-                    className="px-3 py-2 rounded-lg border"
-                    onClick={() => downloadPins(pins)}
-                >
-                    Save Layout
-                </button>
-                <label className="px-3 py-2 rounded-lg border cursor-pointer">
-                    Load Layout
-                    <input
-                        type="file"
-                        accept="application/json"
-                        className="hidden"
-                        onChange={uploadPins}
-                    />
-                </label>
-            </div>
+            {/* Dev / internal build tools */}
+            {devTools && (
+                <div className="mb-4 flex items-center gap-2">
+                    <button
+                        className="px-3 py-2 rounded-lg border"
+                        onClick={() => setColorIdx((i) => i + 1)}
+                        title="Cycle marker color for next click"
+                    >
+                        Add Property Slot (color:{" "}
+                        {["green", "blue", "amber", "red"][colorIdx % 4]})
+                    </button>
+                    <button
+                        className="px-3 py-2 rounded-lg border"
+                        onClick={clearServerPins}
+                    >
+                        Clear All Slots
+                    </button>
+                    <button
+                        className="px-3 py-2 rounded-lg border"
+                        onClick={() => downloadPins(pins)}
+                    >
+                        Save Layout
+                    </button>
+                    <label className="px-3 py-2 rounded-lg border cursor-pointer">
+                        Load Layout
+                        <input
+                            type="file"
+                            accept="application/json"
+                            className="hidden"
+                            onChange={uploadPins}
+                        />
+                    </label>
+                </div>
+            )}
 
             <MapContainer
                 className="rounded-xl border relative z-0"
@@ -363,6 +407,9 @@ export default function MapPage() {
 
                 {pins.map((p) => {
                     const isSel = p.id === selectedId;
+                    const isOwner =
+                        (p.owner || "").toLowerCase() === me;
+
                     return (
                         <Marker
                             key={p.id ?? `${p.lat},${p.lng}`}
@@ -370,33 +417,48 @@ export default function MapPage() {
                             icon={squareIcon(p.color, isSel)}
                             eventHandlers={{
                                 click: () => setSelectedId(p.id || null),
-                                contextmenu: () => p.id && deletePin(p.id),
+                                contextmenu: () => {
+                                    // Right-click delete: only dev tools or owner
+                                    if (!p.id) return;
+                                    if (devTools) {
+                                        deletePin(p.id);
+                                    }
+                                },
                             }}
                         />
                     );
                 })}
             </MapContainer>
 
-            {/* Drawer */}
+            {/* Property drawer */}
             <Drawer
                 open={!!selectedPin}
                 pin={selectedPin}
                 typeMap={typeMap}
                 me={me}
                 onClose={() => setSelectedId(null)}
-                onDelete={() => selectedPin?.id && deletePin(selectedPin.id)}
+                onDelete={async () => {
+                    if (!selectedPin?.id) return;
+                    const isOwner =
+                        (selectedPin.owner || "").toLowerCase() === me;
+                    if (!devTools && !isOwner) return;
+                    await deletePin(selectedPin.id);
+                }}
                 onMakeOffer={() => {
                     setOfferAmount("");
                     setOfferOpen(true);
                 }}
                 onChanged={fetchPins}
+                allowDelete={
+                    !!selectedPin &&
+                    (devTools ||
+                        (selectedPin.owner || "").toLowerCase() === me)
+                }
             />
 
-
-            {/* Make Offer Modal (close reliably + top-right toast) */}
+            {/* Make Offer Modal */}
             {offerOpen && selectedPin && (
                 <div className="fixed inset-0 z-[120]">
-                    {/* overlay */}
                     <div
                         className="absolute inset-0 bg-black/30"
                         onClick={() => {
@@ -410,7 +472,11 @@ export default function MapPage() {
                         <div className="w-[380px] rounded-xl border bg-white p-4 space-y-3 shadow-xl">
                             <div className="font-medium">Make Offer</div>
                             <div className="text-sm text-gray-600">
-                                Offer to buy <span className="font-semibold">{selectedPin.owner}</span>’s property.
+                                Offer to buy{" "}
+                                <span className="font-semibold">
+                                    {selectedPin.owner || "this player"}
+                                </span>
+                                ’s property.
                             </div>
                             <input
                                 type="number"
@@ -418,7 +484,9 @@ export default function MapPage() {
                                 className="w-full border rounded px-3 py-2"
                                 placeholder="Amount"
                                 value={offerAmount}
-                                onChange={(e) => setOfferAmount(e.target.value)}
+                                onChange={(e) =>
+                                    setOfferAmount(e.target.value)
+                                }
                             />
                             <div className="flex justify-end gap-2">
                                 <button
@@ -434,7 +502,9 @@ export default function MapPage() {
                                 <button
                                     className={
                                         "px-3 py-2 border rounded bg-indigo-600 text-white " +
-                                        (offerBusy ? "opacity-60 cursor-not-allowed" : "")
+                                        (offerBusy
+                                            ? "opacity-60 cursor-not-allowed"
+                                            : "")
                                     }
                                     onClick={async () => {
                                         const amount = Number(offerAmount || 0);
@@ -443,12 +513,16 @@ export default function MapPage() {
                                         try {
                                             await createOffer({
                                                 pinId: selectedPin.id,
-                                                fromOwner: me,                    // <-- use logged-in email
-                                                toOwner: selectedPin.owner || "",
+                                                fromOwner: me,
+                                                toOwner:
+                                                    selectedPin.owner || "",
                                                 amount,
                                             });
                                             setOfferSent(true);
-                                            setTimeout(() => setOfferSent(false), 1800);
+                                            setTimeout(
+                                                () => setOfferSent(false),
+                                                1800
+                                            );
                                         } catch (e) {
                                             console.error(e);
                                         } finally {

@@ -5,20 +5,9 @@
     "color": "#22c55e",
     "type": "Data Center",
     "owner": "test@test.com",
-    "level": 1,
-    "id": "15b0f63877014e34b59c48e0dba92db2",
-    "createdAt": 1762266970230,
-    "lastTradeAt": 1762426570344
-  },
-  {
-    "lat": 52.81521319941483,
-    "lng": -2.199325561523438,
-    "color": "#22c55e",
-    "type": "Data Center",
-    "owner": "test@test.com",
     "level": 5,
-    "id": "f6bda9ced3c64d89949c8ac2215084f1",
-    "createdAt": 1762267569733
+    "id": "15b0f63877014e34b59c48e0dba92db2",
+    "createdAt": 1762266970230
   },
   {
     "lat": 52.834713824718214,
@@ -38,7 +27,6 @@
     "owner": "richp77@gmail.com",
     "level": 5,
     "id": "91e3ecc1e7c6448281597d9afdf531d0",
-    "createdAt": 1762418750470,
-    "lastTradeAt": 1762426341485
+    "createdAt": 1762418750470
   }
 ]
