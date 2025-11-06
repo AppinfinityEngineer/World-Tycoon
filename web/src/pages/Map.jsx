@@ -5,6 +5,7 @@ import L from "leaflet";
 import { useEffect, useMemo, useState } from "react";
 import api from "../lib/api";
 import { useAuth } from "../store/auth";
+import PinBuyUpgradeButtons from "../components/PinBuyUpgradeButtons";
 
 /* ---------- icons ---------- */
 function squareIcon(color = "#22c55e", selected = false) {
@@ -38,7 +39,7 @@ function useKey(key, handler) {
 }
 
 /* ---------- Drawer ---------- */
-function Drawer({ open, onClose, pin, typeMap, onEdit, onDelete, onMakeOffer, me }) {
+function Drawer({ open, onClose, pin, typeMap, onChanged, onDelete, onMakeOffer, me }) {
     if (!open || !pin) return null;
 
     const t = typeMap[pin.type || ""] || { name: "—", baseIncome: 0, key: pin.type || "" };
@@ -84,7 +85,8 @@ function Drawer({ open, onClose, pin, typeMap, onEdit, onDelete, onMakeOffer, me
                     <div className="font-semibold tracking-tight text-sm">Pin Details</div>
 
                     <div className="flex items-center gap-1 shrink-0">
-                        {pin.owner && pin.owner !== me && (
+                        {/* Make Offer: only when someone else owns it */}
+                        {pin.owner && pin.owner.toLowerCase() !== me && (
                             <button
                                 className="h-7 px-2 rounded border text-[11px] leading-none whitespace-nowrap hover:bg-gray-50"
                                 onClick={onMakeOffer}
@@ -93,13 +95,11 @@ function Drawer({ open, onClose, pin, typeMap, onEdit, onDelete, onMakeOffer, me
                                 Make Offer
                             </button>
                         )}
-                        <button
-                            className="h-7 px-2 rounded border text-[11px] leading-none whitespace-nowrap hover:bg-gray-50"
-                            onClick={onEdit}
-                            title="Edit"
-                        >
-                            Edit
-                        </button>
+
+                        {/* Buy / Upgrade controls */}
+                        <PinBuyUpgradeButtons pin={pin} typeMap={typeMap} onChanged={onChanged} />
+
+                        {/* (Optional) keep Delete if you still want admin/dev delete */}
                         <button
                             className="h-7 px-2 rounded border text-[11px] leading-none whitespace-nowrap hover:bg-gray-50"
                             onClick={onDelete}
@@ -107,6 +107,7 @@ function Drawer({ open, onClose, pin, typeMap, onEdit, onDelete, onMakeOffer, me
                         >
                             Delete
                         </button>
+
                         <button
                             className="h-7 px-2 rounded border text-[11px] leading-none whitespace-nowrap hover:bg-gray-50"
                             onClick={onClose}
@@ -177,13 +178,13 @@ function Drawer({ open, onClose, pin, typeMap, onEdit, onDelete, onMakeOffer, me
 /* ---------- Map Page ---------- */
 export default function MapPage() {
     const { user } = useAuth();
-    const me = user?.email || "Me";
+    const me = (user?.email || "me").toLowerCase();
+
 
     const [pins, setPins] = useState([]);
     const [colorIdx, setColorIdx] = useState(0);
     const [loading, setLoading] = useState(true);
     const [selectedId, setSelectedId] = useState(null);
-    const [editing, setEditing] = useState(null);
     const [typeMap, setTypeMap] = useState({}); // key -> {key, name, baseIncome}
 
     // Offers (MVP)
@@ -231,21 +232,6 @@ export default function MapPage() {
             if (selectedId === id) setSelectedId(null);
         } catch (e) {
             console.error("deletePin failed", e);
-        }
-    }
-
-    async function patchPin(update) {
-        const { id, type, owner, level, color } = update;
-        try {
-            const { data } = await api.patch(`/pins/${id}`, {
-                type,
-                owner,
-                level,
-                color,
-            });
-            setPins((prev) => prev.map((x) => (x.id === id ? data : x)));
-        } catch (e) {
-            console.error("patchPin failed", e);
         }
     }
 
@@ -398,105 +384,14 @@ export default function MapPage() {
                 typeMap={typeMap}
                 me={me}
                 onClose={() => setSelectedId(null)}
-                onEdit={() => selectedPin && setEditing({ ...selectedPin })}
                 onDelete={() => selectedPin?.id && deletePin(selectedPin.id)}
                 onMakeOffer={() => {
                     setOfferAmount("");
                     setOfferOpen(true);
                 }}
+                onChanged={fetchPins}
             />
 
-            {/* Simple Edit Modal */}
-            {editing && (
-                <div className="fixed inset-0 bg-black/30 grid place-items-center z-50">
-                    <div className="w-[420px] rounded-xl border bg-white p-4 space-y-3">
-                        <div className="font-medium">Edit Pin</div>
-
-                        {/* Type dropdown from server */}
-                        <label className="block text-xs text-gray-500">Type</label>
-                        <select
-                            className="w-full border rounded px-3 py-2 bg-white"
-                            value={editing.type || ""}
-                            onChange={(e) =>
-                                setEditing((s) => ({ ...s, type: e.target.value }))
-                            }
-                        >
-                            <option value="">— select type —</option>
-                            {Object.values(typeMap)
-                                .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
-                                .map((t) => (
-                                    <option key={t.key} value={t.key}>
-                                        {t.name}
-                                        {t.key &&
-                                            t.key.toLowerCase() !== (t.name || "").toLowerCase()
-                                            ? ` (${t.key})`
-                                            : ""}
-                                    </option>
-                                ))}
-                        </select>
-
-                        {/* Owner */}
-                        <label className="block text-xs text-gray-500">Owner</label>
-                        <input
-                            className="w-full border rounded px-3 py-2"
-                            placeholder="Owner"
-                            value={editing.owner || ""}
-                            onChange={(e) =>
-                                setEditing((s) => ({ ...s, owner: e.target.value }))
-                            }
-                        />
-
-                        {/* Level + Color */}
-                        <div className="flex gap-2">
-                            <div className="flex-1">
-                                <label className="block text-xs text-gray-500">Level (1–5)</label>
-                                <input
-                                    type="number"
-                                    className="w-full border rounded px-3 py-2"
-                                    value={editing.level ?? 1}
-                                    min={1}
-                                    max={5}
-                                    onChange={(e) =>
-                                        setEditing((s) => ({
-                                            ...s,
-                                            level: Math.max(1, Math.min(5, Number(e.target.value || 1))),
-                                        }))
-                                    }
-                                />
-                            </div>
-                            <div className="flex-1">
-                                <label className="block text-xs text-gray-500">Color (#hex)</label>
-                                <input
-                                    className="w-full border rounded px-3 py-2"
-                                    placeholder="#22c55e"
-                                    value={editing.color || "#22c55e"}
-                                    onChange={(e) =>
-                                        setEditing((s) => ({ ...s, color: e.target.value }))
-                                    }
-                                />
-                            </div>
-                        </div>
-
-                        <div className="flex justify-end gap-2">
-                            <button
-                                className="px-3 py-2 border rounded"
-                                onClick={() => setEditing(null)}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                className="px-3 py-2 border rounded bg-indigo-600 text-white"
-                                onClick={async () => {
-                                    await patchPin(editing);
-                                    setEditing(null);
-                                }}
-                            >
-                                Save
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* Make Offer Modal (close reliably + top-right toast) */}
             {offerOpen && selectedPin && (

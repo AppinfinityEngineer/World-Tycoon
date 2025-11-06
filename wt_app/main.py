@@ -18,6 +18,9 @@ import wt_app.api.economy as economy_api
 import wt_app.api.settings as settings_api
 import wt_app.api.offers as offers_api
 import wt_app.api.admin_settings as admin_settings_api
+from wt_app.api import shop
+from wt_app.api.economy_health import router as economy_health_router
+from wt_app.api.pins_market import router as pins_market_router
 
 from wt_app.core.autotick import start_auto_tick
 
@@ -51,6 +54,9 @@ app.include_router(auth_api.router)
 app.include_router(settings_api.router)
 app.include_router(offers_api.router)
 app.include_router(admin_settings_api.router)
+app.include_router(shop.router)
+app.include_router(economy_health_router) 
+app.include_router(pins_market_router)
 
 # CORS
 app.add_middleware(
