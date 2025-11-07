@@ -82,11 +82,11 @@ function Drawer({
 
             <aside
                 className="
-                    absolute right-4 top-20 w-[280px]
-                    rounded-xl border bg-white shadow-xl
-                    overflow-hidden pointer-events-auto
-                    animate-[wtSlideIn_.18s_ease-out]
-                "
+        absolute right-4 top-20 w-[340px]
+        rounded-xl border bg-white shadow-xl
+        overflow-hidden pointer-events-auto
+        animate-[wtSlideIn_.18s_ease-out]
+    "
                 style={{ zIndex: 60 }}
             >
                 {/* header bar */}
@@ -100,40 +100,53 @@ function Drawer({
                 </div>
 
                 {/* top row buttons */}
-                <div className="px-3 py-2 flex items-center justify-between">
-                    <div className="font-semibold tracking-tight text-sm">
-                        Property Details
+                <div className="px-3 pt-2 pb-1">
+                    <div className="flex items-start justify-between gap-2">
+                        <div>
+                            <div className="font-semibold tracking-tight text-sm">
+                                Property Details
+                            </div>
+                            {streetName && (
+                                <div className="text-[10px] text-gray-500">
+                                    {streetName}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                            {canMakeOffer && (
+                                <button
+                                    className="h-7 px-2 rounded border text-[11px] leading-none whitespace-nowrap hover:bg-gray-50"
+                                    onClick={onMakeOffer}
+                                >
+                                    Make Offer
+                                </button>
+                            )}
+
+                            {allowDelete && (
+                                <button
+                                    className="h-7 px-2 rounded border text-[11px] leading-none whitespace-nowrap hover:bg-gray-50"
+                                    onClick={onDelete}
+                                >
+                                    Delete
+                                </button>
+                            )}
+
+                            <button
+                                className="h-7 px-2 rounded border text-[11px] leading-none whitespace-nowrap hover:bg-gray-50"
+                                onClick={onClose}
+                            >
+                                Close
+                            </button>
+                        </div>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                        {canMakeOffer && (
-                            <button
-                                className="h-7 px-2 rounded border text-[11px] leading-none whitespace-nowrap hover:bg-gray-50"
-                                onClick={onMakeOffer}
-                            >
-                                Make Offer
-                            </button>
-                        )}
 
-                        {/* Buy / Upgrade (component enforces rules: only buyer / owner etc) */}
+                    {/* Buy / Upgrade row */}
+                    <div className="mt-2 flex justify-end">
                         <PinBuyUpgradeButtons pin={pin} onChanged={onChanged} />
-
-                        {allowDelete && (
-                            <button
-                                className="h-7 px-2 rounded border text-[11px] leading-none whitespace-nowrap hover:bg-gray-50"
-                                onClick={onDelete}
-                            >
-                                Delete
-                            </button>
-                        )}
-
-                        <button
-                            className="h-7 px-2 rounded border text-[11px] leading-none whitespace-nowrap hover:bg-gray-50"
-                            onClick={onClose}
-                        >
-                            Close
-                        </button>
                     </div>
                 </div>
+
 
                 {/* body */}
                 <div className="px-3 pb-3 text-[13px] leading-6">
